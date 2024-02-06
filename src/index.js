@@ -8,7 +8,7 @@ const app = express();
 connectDB();
 
 app.get('/', (req, res) => {
-    res.send('Welcome');
+    res.json('Welcome Benson');
 });
 
 const port = process.env.PORT || 3001;
