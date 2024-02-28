@@ -25,7 +25,7 @@ const generateAccessAndRefereshTokens = async(facultyId) =>{
 const registerFaculty = asyncHandler( async (req, res) => {
     
     const {name, branch, collEmail, phoneNumber, password } = req.body
-    console.log("collEmail: ", collEmail);
+    
 
     if (
         [name, branch, collEmail, phoneNumber, password].some((field) =>
@@ -35,7 +35,7 @@ const registerFaculty = asyncHandler( async (req, res) => {
     }
 
     const existedFaculty = await Faculty.findOne({
-        $or: [{ name }, { collEmail }]
+        $or: [{ collEmail }, { phoneNumber }]
     })
 
     if (existedFaculty){

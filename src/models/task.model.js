@@ -37,7 +37,8 @@ const taskSchema = new Schema({
 
     facultyName: {
         type: Schema.Types.ObjectId,
-        ref: "Faculty"
+        ref: "Faculty",
+        required: true
     },
 
     slot: {

@@ -33,7 +33,7 @@ const registerStudent = asyncHandler( async (req, res) => {
     }
 
     const existedStudent = await Student.findOne({
-        $or: [{ name }, { collEmail }, { rollNo }]
+        $or: [{ collEmail }, { rollNo }, { personalEmail }, { phoneNumber }, { walletAdd }]
     })
 
     if (existedStudent){
@@ -68,7 +68,6 @@ const registerStudent = asyncHandler( async (req, res) => {
 const loginStudent = asyncHandler(async (req, res) =>{
     
     const {collEmail,rollNo, password} = req.body
-    console.log(collEmail);
 
     if (!rollNo && !collEmail) {
         throw new ApiError(400, "rollno or email is required")
