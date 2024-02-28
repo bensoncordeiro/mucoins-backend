@@ -65,18 +65,18 @@ const studentSchema = new Schema({
 },
 {timestamps: true})
 
-userSchema.pre("save", async function (next) {
+studentSchema.pre("save", async function (next) {
     if(!this.isModified("password")) return next();
 
     this.password = await bcrypt.hash(this.password, 10)
     next()
 })
 
-userSchema.methods.isPasswordCorrect = async function(password){
+studentSchema.methods.isPasswordCorrect = async function(password){
     return await bcrypt.compare(password, this.password)
 }
 
-userSchema.methods.generateAccessToken = function(){
+studentSchema.methods.generateAccessToken = function(){
     return jwt.sign(
         {
             _id: this._id,
@@ -90,7 +90,7 @@ userSchema.methods.generateAccessToken = function(){
         }
     )
 }
-userSchema.methods.generateRefreshToken = function(){
+studentSchema.methods.generateRefreshToken = function(){
     return jwt.sign(
         {
             _id: this._id,

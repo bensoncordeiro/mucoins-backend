@@ -7,9 +7,10 @@ dotenv.config({
 });
 
 
-// app.get('/', (req, res) => {
-//     res.json('Welcome Benson');
-// });
+app.get('/', (req, res) => {
+res.json('Welcome Benson');
+});
+
 connectDB()
 .then(() => {
     app.listen(process.env.PORT || 4000, () => {
