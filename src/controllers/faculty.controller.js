@@ -68,7 +68,6 @@ const registerFaculty = asyncHandler( async (req, res) => {
 const loginFaculty = asyncHandler(async (req, res) =>{
     
     const {collEmail,name, password} = req.body
-    console.log(collEmail);
 
     if (!name && !collEmail) {
         throw new ApiError(400, "name or email is required")
