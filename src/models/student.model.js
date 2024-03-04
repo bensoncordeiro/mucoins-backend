@@ -80,6 +80,7 @@ studentSchema.methods.generateAccessToken = function(){
     return jwt.sign(
         {
             _id: this._id,
+            branch: this.branch,
             rollNo: this.rollNo,
             walletAdd: this.walletAdd,
             name: this.name

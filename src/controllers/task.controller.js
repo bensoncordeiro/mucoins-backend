@@ -50,6 +50,36 @@ const addTask = asyncHandler( async (req, res) => {
     )
 })
 
+const getTasksForStudent = asyncHandler( async (req, res) => {
+    const incomingAccessToken = req.cookies.accessToken
+
+    if (!incomingAccessToken) {
+        throw new ApiError(401, "Student not logged in")
+    }
+
+    const decodedToken = jwt.verify(
+        incomingAccessToken,
+        process.env.ACCESS_TOKEN_SECRET
+    )
+    
+
+    const studentBranch = decodedToken?.branch
+
+    if (!studentBranch) {
+        throw new ApiError(401, "Invalid Access token")
+    }
+
+
+    const taskList = await Task.find({branch: studentBranch});
+
+
+    return res.status(201).json(
+        new ApiResponse(200, taskList, "Fetched All tasks for student successfully")
+    )
+
+})
+
 export {
-    addTask
+    addTask,
+    getTasksForStudent
  }
