@@ -1,8 +1,8 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
-import {ApiError} from "../utils/ApiError.js"
+import {ApiError} from "../utils/ApiError.js";
 import { Student } from "../models/student.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefereshTokens = async(studentId) =>{
     try {
@@ -240,7 +240,7 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
     return res
     .status(200)
     .json(new ApiResponse(200, student, "Account details updated successfully"))
-});
+})
 
 
 export {
