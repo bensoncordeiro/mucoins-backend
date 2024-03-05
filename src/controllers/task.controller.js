@@ -120,7 +120,33 @@ async function calculateReward(hours, difficulty) {
     }
   }
 
+const getSubmittedTasksOfFaculty = asyncHandler(async (req, res) => {
+    const incomingAccessToken = req.cookies.accessToken
+
+    if (!incomingAccessToken) {
+        throw new ApiError(401, "Faculty not logged in")
+    }
+
+    const decodedToken = jwt.verify(
+        incomingAccessToken,
+        process.env.ACCESS_TOKEN_SECRET
+    )
+
+    const facultyName = decodedToken?._id
+
+    if (!facultyName) {
+        throw new ApiError(401, "Invalid Access token")
+    }
+
+    const taskList = await Task.find({facultyName})
+
+    return res.status(201).json(
+        new ApiResponse(200, taskList, "Fetched All tasks for faculty successfully")
+    )
+})
+
 export {
     addTask,
-    getTasksForStudent
+    getTasksForStudent,
+    getSubmittedTasksOfFaculty
  }
