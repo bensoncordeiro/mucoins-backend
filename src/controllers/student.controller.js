@@ -296,6 +296,41 @@ const acceptTask = asyncHandler(async(req, res) => {
     
 })
 
+const getAcceptedTasks = asyncHandler(async (req, res) => {
+    const studentId = req.student?._id;
+
+    const acceptedTasks = await AcceptedTask.find({ studentId });
+
+    if (!acceptedTasks || acceptedTasks.length === 0) {
+        return res.status(404).json(new ApiResponse(404, null, "No accepted tasks found for this student"));
+    }
+
+    const taskListDetails = await Promise.all(
+        acceptedTasks.map(async (acceptedTask) => {
+            // Retrieve the task details for each accepted task
+            const task = await Task.findById(acceptedTask.taskId);
+
+            // Construct the response object with the desired fields
+            const taskDetails = {
+                _id: task._id,
+                name: task.name,
+                description: task.description,
+                branch: task.branch,
+                category: task.category,
+                reward: acceptedTask.rewardValue, // Use acceptedTask to get the reward value
+            };
+
+            return taskDetails;
+        })
+    );
+
+    return res.status(200).json(
+        new ApiResponse(200, taskListDetails, "Fetched all accepted tasks for the student successfully")
+    );
+});
+
+
+
 const getTasksForStudent = asyncHandler( async (req, res) => {
 
     const studentBranch = req.student?.branch
@@ -340,5 +375,6 @@ export {
     getCurrentStudent,
     updateAccountDetails,
     acceptTask,
-    getTasksForStudent
+    getTasksForStudent,
+    getAcceptedTasks
  }
