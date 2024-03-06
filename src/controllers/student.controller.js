@@ -1,8 +1,9 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import {ApiError} from "../utils/ApiError.js";
-import { Student } from "../models/student.model.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
-import jwt from "jsonwebtoken";
+import { asyncHandler } from "../utils/asyncHandler.js"
+import {ApiError} from "../utils/ApiError.js"
+import { Student } from "../models/student.model.js"
+import {AcceptedTask, Task} from "../models/task.model.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefereshTokens = async(studentId) =>{
     try {
@@ -242,6 +243,93 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, student, "Account details updated successfully"))
 })
 
+const acceptTask = asyncHandler(async(req, res) => {
+    const {taskId, reward} = req.body
+
+    const studentId = req.student?._id
+    
+    const taskDetails = await Task.findById(taskId)
+    if(!taskDetails){
+        throw new ApiError(404, "Task not found")
+    }
+
+    const currentSlotValue = taskDetails.slotsLeft
+
+    const isTaskAlreadyAccepted = await AcceptedTask.findOne({ studentId, taskId })
+    if (isTaskAlreadyAccepted) {
+        throw new ApiError(400, "Student has already accepted this task")
+    }
+    else{
+        if(currentSlotValue >=1){
+            const facultyId = taskDetails.facultyName
+            const slotAccepted = (taskDetails.slot - currentSlotValue) + 1
+        
+        
+            const acceptedTaskDetails = await AcceptedTask.create({
+                studentId,
+                taskId,
+                rewardValue: reward,
+                facultyId,
+                slotAccepted
+        
+            })
+            await Task.findByIdAndUpdate(
+                taskId,
+                {
+                    $set: {
+                        slotsLeft: currentSlotValue - 1
+                    }
+                },
+                {new: true}
+                
+            )
+        
+            return res
+            .status(200)
+            .json(new ApiResponse(200, acceptedTaskDetails, "Account details updated successfully"))
+        
+        }
+        else{
+            throw new ApiError(502, "No slots Available for this task")
+        }
+    }
+    
+})
+
+const getTasksForStudent = asyncHandler( async (req, res) => {
+
+    const studentBranch = req.student?.branch
+
+    if (!studentBranch) {
+        throw new ApiError(401, "Invalid Access token")
+    }
+
+    
+    const taskList = await Task.find({branch: studentBranch})
+
+    const taskListWithRewards = await Promise.all(
+        taskList.map(async (task) => {
+          const reward = await calculateReward(task.hours, task.difficulty)
+
+          const frontEndAttributes = {
+            _id: task._id,
+            name: task.name,
+            description: task.description,
+            branch: task.branch,
+            category: task.category,
+            slot: task.slotsLeft,
+            reward: reward,
+          }
+  
+          return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
+        })
+      )
+
+    return res.status(201).json(
+        new ApiResponse(200, taskListWithRewards, "Fetched All tasks for student successfully")
+    )
+
+})
 
 export {
     registerStudent,
@@ -250,5 +338,7 @@ export {
     refreshAccessTokenStudent,
     changeCurrentPassword,
     getCurrentStudent,
-    updateAccountDetails
+    updateAccountDetails,
+    acceptTask,
+    getTasksForStudent
  }

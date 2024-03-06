@@ -1,10 +1,9 @@
 import { Router } from "express";
-import { addTask, getTasksForStudent, getSubmittedTasksOfFaculty } from "../controllers/task.controller.js";
+import { addTask } from "../controllers/task.controller.js";
+import { verifyJWTfaculty } from "../middlewares/auth.middleware.js";
 
 const router = Router()
 
 router.route("/newTask").post(addTask)
-router.route("/getTasks").get(getTasksForStudent)
-router.route("/getAddedTasks").get(getSubmittedTasksOfFaculty)
 
 export default router 

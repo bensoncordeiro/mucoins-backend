@@ -1,14 +1,15 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import {ApiError} from "../utils/ApiError.js";
-import { Task } from "../models/task.model.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
-import { Variable } from "../models/admin.model.js";
-import jwt from "jsonwebtoken";
+import { asyncHandler } from "../utils/asyncHandler.js"
+import {ApiError} from "../utils/ApiError.js"
+import { Task } from "../models/task.model.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
+import { Variable } from "../models/admin.model.js"
+import jwt from "jsonwebtoken"
 
 
 const addTask = asyncHandler(async (req, res) => {
     const { name, description, branch, hours, category, difficulty, slot } = req.body
     const incomingAccessToken = req.cookies.accessToken
+    console.log(branch)
 
     if (!incomingAccessToken) {
         throw new ApiError(401, "Faculty not logged in")
@@ -45,7 +46,8 @@ const addTask = asyncHandler(async (req, res) => {
         category,
         difficulty,
         facultyName,
-        slot
+        slot,
+        slotsLeft: slot
     })
 
     return res.status(201).json(
@@ -53,51 +55,7 @@ const addTask = asyncHandler(async (req, res) => {
     )
 })
 
-const getTasksForStudent = asyncHandler( async (req, res) => {
-    const incomingAccessToken = req.cookies.accessToken
 
-    if (!incomingAccessToken) {
-        throw new ApiError(401, "Student not logged in")
-    }
-
-    const decodedToken = jwt.verify(
-        incomingAccessToken,
-        process.env.ACCESS_TOKEN_SECRET
-    )
-    
-
-    const studentBranch = decodedToken?.branch
-
-    if (!studentBranch) {
-        throw new ApiError(401, "Invalid Access token")
-    }
-
-    
-    const taskList = await Task.find({branch: studentBranch})
-
-    const taskListWithRewards = await Promise.all(
-        taskList.map(async (task) => {
-          const reward = await calculateReward(task.hours, task.difficulty)
-
-          const frontEndAttributes = {
-            _id: task._id,
-            name: task.name,
-            description: task.description,
-            branch: task.branch,
-            category: task.category,
-            slot: task.slot,
-            reward: reward,
-          }
-  
-          return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
-        })
-      )
-
-    return res.status(201).json(
-        new ApiResponse(200, taskListWithRewards, "Fetched All tasks for student successfully")
-    )
-
-})
 
 async function calculateReward(hours, difficulty) {
     try {
@@ -120,33 +78,7 @@ async function calculateReward(hours, difficulty) {
     }
   }
 
-const getSubmittedTasksOfFaculty = asyncHandler(async (req, res) => {
-    const incomingAccessToken = req.cookies.accessToken
-
-    if (!incomingAccessToken) {
-        throw new ApiError(401, "Faculty not logged in")
-    }
-
-    const decodedToken = jwt.verify(
-        incomingAccessToken,
-        process.env.ACCESS_TOKEN_SECRET
- )
-
-    const facultyName = decodedToken?._id
-
-    if (!facultyName) {
-        throw new ApiError(401, "Invalid Access token")
-    }
-
-    const taskList = await Task.find({facultyName})
-
-    return res.status(201).json(
-        new ApiResponse(200, taskList, "Fetched All tasks for faculty successfully")
-    )
-})
 
 export {
-    addTask,
-    getTasksForStudent,
-    getSubmittedTasksOfFaculty
+    addTask
  }

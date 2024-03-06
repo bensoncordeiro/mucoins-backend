@@ -1,4 +1,4 @@
-import mongoose, {Schema} from "mongoose";
+import mongoose, {Schema} from "mongoose"
 
 const taskSchema = new Schema({
     name: {
@@ -46,6 +46,10 @@ const taskSchema = new Schema({
         required: true,
     },
 
+    slotsLeft: {
+        type: Number,
+        required: true
+    }
 
 },
 {timestamps: true})
@@ -53,3 +57,40 @@ const taskSchema = new Schema({
 
 
 export const Task = mongoose.model("Task", taskSchema)
+
+const AcceptedTaskSchema = new Schema({
+    studentId: {
+        type: Schema.Types.ObjectId,
+        ref: "Student",
+        required: true
+    },
+    
+    taskId: {
+        type: Schema.Types.ObjectId,
+        ref: "Task",
+        required: true
+    },
+
+    rewardValue: {
+        type: Number,
+        required: true
+    },
+    
+    facultyId: {
+        type: Schema.Types.ObjectId,
+        ref: "Faculty",
+        required: true
+    },
+
+    slotAccepted: {
+        type: Number,
+        required: true,
+    },
+
+
+},
+{timestamps: true})
+
+
+
+export const AcceptedTask = mongoose.model("AcceptedTask", AcceptedTaskSchema)

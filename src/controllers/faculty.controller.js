@@ -1,8 +1,8 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import {ApiError} from "../utils/ApiError.js";
-import { Faculty } from "../models/faculty.model.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
-import jwt from "jsonwebtoken";
+import { asyncHandler } from "../utils/asyncHandler.js"
+import {ApiError} from "../utils/ApiError.js"
+import { Faculty } from "../models/faculty.model.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefereshTokens = async(facultyId) =>{
     try {
@@ -242,8 +242,18 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
     return res
     .status(200)
     .json(new ApiResponse(200, faculty, "Account details updated successfully"))
-});
+})
 
+const getSubmittedTasksOfFaculty = asyncHandler(async (req, res) => {
+
+    const facultyId = req.faculty?._id
+
+    const taskList = await Task.find({facultyId})
+
+    return res.status(201).json(
+        new ApiResponse(200, taskList, "Fetched All tasks for faculty successfully")
+    )
+})
 
 export {
     registerFaculty,
@@ -252,5 +262,6 @@ export {
     refreshAccessTokenFaculty,
     changeCurrentPassword,
     getCurrentFaculty,
-    updateAccountDetails
+    updateAccountDetails,
+    getSubmittedTasksOfFaculty
  }

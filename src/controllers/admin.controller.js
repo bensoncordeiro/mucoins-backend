@@ -1,9 +1,7 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import {ApiError} from "../utils/ApiError.js";
-import { Variable } from "../models/admin.model.js";
-import { Adminuser } from "../models/adminuser.model.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
-
+import { asyncHandler } from "../utils/asyncHandler.js"
+import {ApiError} from "../utils/ApiError.js"
+import { Variable, Adminuser } from "../models/admin.model.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
 
 const setBaseMul = asyncHandler( async (req, res) => {
     

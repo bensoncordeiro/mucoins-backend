@@ -1,14 +1,9 @@
-import {app} from './app.js'
+import {app} from './app.js';
 import dotenv from 'dotenv';
 import connectDB from './db/index.js';
 
 dotenv.config({
     path:'./.env'
-});
-
-
-app.get('/', (req, res) => {
-res.json('Welcome Benson');
 });
 
 connectDB()
