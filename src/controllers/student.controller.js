@@ -1,9 +1,10 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
 import {ApiError} from "../utils/ApiError.js"
 import { Student } from "../models/student.model.js"
-import {AcceptedTask, Task} from "../models/task.model.js"
+import {AcceptedTask, PendingApprovalTasks, Task} from "../models/task.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
+import {uploadOnCloudinary} from "../utils/cloudinary.js"
 
 const generateAccessAndRefereshTokens = async(studentId) =>{
     try {
@@ -15,7 +16,7 @@ const generateAccessAndRefereshTokens = async(studentId) =>{
         await student.save({ validateBeforeSave: false })
 
         return {accessToken, refreshToken}
-
+    
 
     } catch (error) {
         throw new ApiError(500, "Something went wrong while generating referesh and access token")
@@ -307,17 +308,14 @@ const getAcceptedTasks = asyncHandler(async (req, res) => {
 
     const taskListDetails = await Promise.all(
         acceptedTasks.map(async (acceptedTask) => {
-            // Retrieve the task details for each accepted task
             const task = await Task.findById(acceptedTask.taskId);
-
-            // Construct the response object with the desired fields
             const taskDetails = {
                 _id: task._id,
                 name: task.name,
                 description: task.description,
                 branch: task.branch,
                 category: task.category,
-                reward: acceptedTask.rewardValue, // Use acceptedTask to get the reward value
+                reward: acceptedTask.rewardValue, 
             };
 
             return taskDetails;
@@ -366,6 +364,43 @@ const getTasksForStudent = asyncHandler( async (req, res) => {
 
 })
 
+const submitProof = asyncHandler(async (req, res) => {
+    try {
+        const { taskId } = req.body;
+        const studentId = req.student?._id
+        const taskDetails = await Task.findById(taskId);
+
+        if (!taskDetails) {
+            throw new ApiError(404, "Task not found");
+        }
+        const facultyId = taskDetails.facultyName;
+        if (!req.file) {
+            throw new ApiError(400, 'Proof file is required');
+        }
+
+        const proofLocalPath = req.file.path;
+        const proofOnCloudinary = await uploadOnCloudinary(proofLocalPath);
+
+        if (!proofOnCloudinary) {
+            throw new ApiError(500, 'Failed to upload proof file to Cloudinary');
+        }
+        const PendingApprovalTasksDetails = await PendingApprovalTasks.create({
+            taskId: taskId,
+            facultyId: facultyId,
+            studentId: studentId,
+            proof: proofOnCloudinary.url
+        });
+
+        return res.status(200).json(new ApiResponse(200, PendingApprovalTasksDetails, "Request sent to faculty successfully"));
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
+    }
+});
+
+
+
+
+
 export {
     registerStudent,
     loginStudent,
@@ -376,5 +411,6 @@ export {
     updateAccountDetails,
     acceptTask,
     getTasksForStudent,
-    getAcceptedTasks
+    getAcceptedTasks,
+    submitProof
  }

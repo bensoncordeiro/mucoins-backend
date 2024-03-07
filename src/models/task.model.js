@@ -55,8 +55,8 @@ const taskSchema = new Schema({
 {timestamps: true})
 
 
-
 export const Task = mongoose.model("Task", taskSchema)
+
 
 const AcceptedTaskSchema = new Schema({
     studentId: {
@@ -92,5 +92,34 @@ const AcceptedTaskSchema = new Schema({
 {timestamps: true})
 
 
-
 export const AcceptedTask = mongoose.model("AcceptedTask", AcceptedTaskSchema)
+
+
+
+const PendingApprovalTasksSchema = new Schema({
+    taskId: {
+        type: Schema.Types.ObjectId,
+        ref: "Task",
+        required: true
+    },
+    
+    facultyId: {
+        type: Schema.Types.ObjectId,
+        ref: "Faculty",
+        required: true
+    },
+
+    studentId: {
+        type: Schema.Types.ObjectId,
+        ref: "Student",
+        required: true
+    },
+
+    proof: {
+        type: String, 
+        required: true
+    }
+},
+{ timestamps: true });
+
+export const PendingApprovalTasks = mongoose.model("PendingApprovalTasks", PendingApprovalTasksSchema)
