@@ -364,6 +364,27 @@ const getTasksForStudent = asyncHandler( async (req, res) => {
 
 })
 
+async function calculateReward(hours, difficulty) {
+    try {
+        const baseMultiplierdata = await Variable.findById(process.env.BASE_MULTIPLIER_ID)
+        const baseMultiplier = baseMultiplierdata.baseMul
+        const attendance = 100
+        let multiplier
+        
+        if (attendance >=75)
+        {
+            multiplier = (0.25+(attendance/100))+ (0.33* difficulty) + baseMultiplier
+         }
+        else{
+            multiplier = (0.33* difficulty) + baseMultiplier
+        }
+        const calculatedReward = multiplier * hours
+        return calculatedReward
+    } catch (error) {
+        throw new ApiError(500, "Something went wrong while calculating reward")
+    }
+  }
+
 const submitProof = asyncHandler(async (req, res) => {
     try {
         const { taskId } = req.body;
