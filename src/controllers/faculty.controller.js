@@ -2,7 +2,8 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import { Faculty } from "../models/faculty.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
-import { Task } from "../models/task.model.js"
+import { AcceptedTask, Task, CompletedTasks } from "../models/task.model.js"
+import { Student } from "../models/student.model.js"
 import { Web3 } from 'web3';
 import fs from 'fs';
 import path from 'path';
@@ -211,6 +212,42 @@ const changeCurrentPassword = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, {}, "Password changed successfully"))
 })
 
+const addTask = asyncHandler(async (req, res) => {
+    const { name, description, branch, hours, category, difficulty, slot } = req.body
+
+    if (!incomingAccessToken) {
+        throw new ApiError(401, "Faculty not logged in")
+    }
+
+    if (![name, description, hours, category, difficulty, slot].every(field => typeof field === 'string' && field.trim() !== "")) {
+        throw new ApiError(400, "All fields are required")
+    }
+
+    if (!Array.isArray(branch) || branch.length === 0) {
+        throw new ApiError(400, "At least one branch must be selected")
+    }
+
+    if (branch.some(branchItem => typeof branchItem !== 'string' || branchItem.trim() === '')) {
+        throw new ApiError(400, "Branch names must be non-empty strings")
+    }
+
+    const task = await Task.create({
+        name,
+        description,
+        branch,
+        hours,
+        category,
+        difficulty,
+        facultyId: req.faculty?._id,
+        slot,
+        slotsLeft: slot
+    })
+
+    return res.status(201).json(
+        new ApiResponse(200, task, "Task added successfully")
+    )
+})
+
 const getCurrentFaculty = asyncHandler(async(req, res) => {
     return res
     .status(200)
@@ -248,57 +285,126 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
 
 const getSubmittedTasksOfFaculty = asyncHandler(async (req, res) => {
     const facultyId = req.faculty?._id
-    const taskList = await Task.find({ facultyName: facultyId })
+    const taskList = await Task.find({ facultyId: facultyId })
+    if (!taskList) {
+        throw new ApiError(404, 'No submitted tasks found of faculty');
+    }
     return res.status(200).json(
         new ApiResponse(200, taskList, "Fetched All tasks for faculty successfully")
     )
 })
 
 
-//await transfer(5,"0x3FDA6231C2e5E1A3D772E66620a5aAba88204CDa")
+const getTasksForApprovalOfFaculty = asyncHandler(async (req, res) => {
+    const facultyId = req.faculty?._id
+    const taskListForApproval = await AcceptedTask.find({facultyId: facultyId, isSubmitted: true, isRejected: false})
+    if (!taskListForApproval) {
+        throw new ApiError(404, 'No Tasks found for Approval of faculty');
+    }
+    return res.status(200).json(
+        new ApiResponse(200, taskListForApproval, "Fetched All tasks for Approval of faculty successfully")
+    )
+})
+
+const rejectTask = asyncHandler(async (req, res) => {
+    try {
+        const { taskId,studentId, reason } = req.body
+        if(!reason){
+            throw new ApiError(400, 'Reason is required to reject the task');
+        }
+        const taskToBeRejected = await AcceptedTask.findOneAndUpdate(
+            { _id: taskId, studentId: studentId },
+            { isRejected: true, isSubmitted: false, reason: reason },
+            { new: true }
+        )
+        if (!taskToBeRejected) {
+            throw new ApiError(500, 'Something went wrong while rejecting the task');
+        }
+
+        return res.status(200).json(new ApiResponse(200, taskToBeRejected, "Task Rejected successfuly"));
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
+    }
+});
+
+const approveTask = asyncHandler(async (req, res) => {
+    try {
+        const { taskId,studentId, reason } = req.body
+        if(!reason){
+            throw new ApiError(400, 'Reason is required to accept the task');
+        }
+        
+        const completedTask = await AcceptedTask.findOne({ studentId, taskId });
+        if (!completedTask) {
+            throw new ApiError(404, 'Task not found');
+        }
+
+        const studentDetails = await Student.findOne(studentId)
+        const transactionId = await transfer(completedTask.rewardValue, studentDetails.walletAdd)
+
+        const insertedInCompletedTask = await CompletedTasks.create({
+            studentId: completedTask.studentId,
+            taskId: completedTask.taskId,
+            rewardValue: completedTask.rewardValue,
+            facultyId: completedTask.facultyId,
+            slotAccepted: completedTask.slotAccepted,
+            proof: completedTask.proof,
+            reason: reason,
+            transactionId: transactionId
+        });
+
+    await CompletedTasks.deleteOne({ studentId: studentId, taskId: taskId });
+
+        return res.status(200).json(new ApiResponse(200, insertedInCompletedTask, "Task Approved successfully...Reward has been credited in the student's wallet!"));
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
+    }
+});
+
 async function transfer(value,toaddress) {
     try {
         const web3 = new Web3(new Web3.providers.HttpProvider('HTTP://127.0.0.1:7545'));
-        const block = await web3.eth.getBlockNumber();
-
+    
         const accounts = await web3.eth.getAccounts();
-        console.log(accounts);
-      
-        let balance1, balance2;
-        //The initial balances of the accounts should be 100 Eth (10^18 wei)
-        balance1 = await web3.eth.getBalance(accounts[0]);
-        balance2 = await web3.eth.getBalance(toaddress);
-      
-        console.log(balance1, balance2);
+        //100 Eth = 10^18 wei
     
         //create a transaction sending 1 Ether from account 0 to account 1
         const transaction = {
           from: accounts[0],
           to: toaddress,
-          // value should be passed in wei. For easier use and to avoid mistakes,
-          //	we utilize the auxiliary `toWei` function:
           value: web3.utils.toWei(value, 'ether'),
         };
       
         //send the actual transaction
         const transactionHash = await web3.eth.sendTransaction(transaction);
-        console.log('transactionHash', transactionHash);
+        return transactionHash
       
-        balance1 = await web3.eth.getBalance(accounts[0]);
-        balance2 = await web3.eth.getBalance(toaddress);
-      
-        // see the updated balances
-        console.log(balance1, balance2);
-      
-        // irrelevant with the actual transaction, just to know the gasPrice
-        const gasPrice = await web3.eth.getGasPrice();
-        console.log(gasPrice);
-
     } catch (error) {
         throw new ApiError(500, "Something went wrong while calculating reward")
     }
   }
 
+const getApprovedTasksOfFaculty = asyncHandler(async (req, res) => {
+    const facultyId = req.faculty?._id
+    const taskList = await CompletedTasks.find({ facultyId: facultyId })
+    if (!taskList) {
+        throw new ApiError(404, 'No tasks to show');
+    }
+    return res.status(200).json(
+        new ApiResponse(200, taskList, "Fetched All tasks for faculty successfully")
+    )
+})
+
+const getTasksRejectedByFaculty = asyncHandler(async (req, res) => {
+    const facultyId = req.faculty?._id
+    const taskList = await AcceptedTask.find({facultyId: facultyId, isRejected: true})
+    if (!taskList) {
+        throw new ApiError(404, 'No tasks to show');
+    }
+    return res.status(200).json(
+        new ApiResponse(200, taskList, "Fetched All tasks Rejected by faculty successfully")
+    )
+})
 
 export {
     registerFaculty,
@@ -306,7 +412,13 @@ export {
     logoutFaculty,
     refreshAccessTokenFaculty,
     changeCurrentPassword,
+    addTask,
     getCurrentFaculty,
     updateAccountDetails,
-    getSubmittedTasksOfFaculty
+    getSubmittedTasksOfFaculty,
+    getTasksForApprovalOfFaculty,
+    rejectTask,
+    approveTask,
+    getApprovedTasksOfFaculty,
+    getTasksRejectedByFaculty
  }

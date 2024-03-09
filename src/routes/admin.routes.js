@@ -4,13 +4,15 @@ import { verifyJWTadmin } from "../middlewares/auth.middleware.js";
 
 const router = Router()
 
+router.route("/getCurrentAdmin").get(verifyJWTadmin, getCurrentAdmin)
+
 router.route("/setBaseMultiplier").post(setBaseMul)
-router.route("/updateBaseMultiplier").put(updateBaseMul)
 router.route("/registeradmin").post(registerAdmin)
 router.route("/loginadmin").post(loginAdmin)
 router.route("/logoutadmin").post(verifyJWTadmin, logoutAdmin)
 router.route("/refresh-tokenadmin").post(refreshAccessTokenAdmin)
-router.route("/getCurrentAdmin").get(verifyJWTadmin, getCurrentAdmin)
+
+router.route("/updateBaseMultiplier").put(updateBaseMul)
 router.route("/updateAccountDetails").put(verifyJWTadmin, updateAccountDetails)
 
 export default router 

@@ -296,7 +296,35 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, admin, "Account details updated successfully"))
 });
 
+const addReward = asyncHandler(async (req, res) => {
+    const { name,description,category,cost,slot } = req.body
 
+    if (![name, description, hours, category, difficulty, slot].every(field => typeof field === 'string' && field.trim() !== "")) {
+        throw new ApiError(400, "All fields are required")
+    }
+
+    if (!Array.isArray(branch) || branch.length === 0) {
+        throw new ApiError(400, "At least one branch must be selected")
+    }
+
+    if (branch.some(branchItem => typeof branchItem !== 'string' || branchItem.trim() === '')) {
+        throw new ApiError(400, "Branch names must be non-empty strings")
+    }
+
+    const reward = await Task.create({
+        name,
+        description,
+        category,
+        cost,
+        slot,
+        slotsLeft: slot,
+        adminId: req.admin?._id
+    })
+
+    return res.status(201).json(
+        new ApiResponse(200, reward, "Reward added successfully")
+    )
+})
 
 
 export {
@@ -308,5 +336,6 @@ export {
     refreshAccessTokenAdmin,
     changeCurrentPassword,
     getCurrentAdmin,
-    updateAccountDetails
+    updateAccountDetails,
+    addReward
  }

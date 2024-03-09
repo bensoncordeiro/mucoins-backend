@@ -1,10 +1,14 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
 import {ApiError} from "../utils/ApiError.js"
 import { Student } from "../models/student.model.js"
-import {AcceptedTask, PendingApprovalTasks, Task} from "../models/task.model.js"
+import {AcceptedTask, CompletedTasks, Task} from "../models/task.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
-import jwt from "jsonwebtoken"
+import { Variable } from "../models/admin.model.js"
+import {Reward, AcceptedReward} from "../models/reward.model.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import jwt from "jsonwebtoken"
+import { Web3 } from "web3";
+
 
 const generateAccessAndRefereshTokens = async(studentId) =>{
     try {
@@ -244,6 +248,33 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, student, "Account details updated successfully"))
 })
 
+const getTasksForStudent = asyncHandler( async (req, res) => {
+    const taskList = await Task.find({branch: req.student?.branch})
+
+    const taskListWithRewards = await Promise.all(
+        taskList.map(async (task) => {
+          const reward = await calculateReward(task.hours, task.difficulty)
+
+          const frontEndAttributes = {
+            _id: task._id,
+            name: task.name,
+            description: task.description,
+            branch: task.branch,
+            category: task.category,
+            slot: task.slotsLeft,
+            reward: reward,
+          }
+  
+          return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
+        })
+      )
+
+    return res.status(201).json(
+        new ApiResponse(200, taskListWithRewards, "Fetched All tasks for student successfully")
+    )
+
+})
+
 const acceptTask = asyncHandler(async(req, res) => {
     const {taskId, reward} = req.body
 
@@ -262,7 +293,7 @@ const acceptTask = asyncHandler(async(req, res) => {
     }
     else{
         if(currentSlotValue >=1){
-            const facultyId = taskDetails.facultyName
+            const facultyId = taskDetails.facultyId
             const slotAccepted = (taskDetails.slot - currentSlotValue) + 1
         
         
@@ -300,7 +331,7 @@ const acceptTask = asyncHandler(async(req, res) => {
 const getAcceptedTasks = asyncHandler(async (req, res) => {
     const studentId = req.student?._id;
 
-    const acceptedTasks = await AcceptedTask.find({ studentId });
+    const acceptedTasks = await AcceptedTask.find({ studentId, isSubmitted: false, isRejected: false });
 
     if (!acceptedTasks || acceptedTasks.length === 0) {
         return res.status(404).json(new ApiResponse(404, null, "No accepted tasks found for this student"));
@@ -328,42 +359,6 @@ const getAcceptedTasks = asyncHandler(async (req, res) => {
 });
 
 
-
-const getTasksForStudent = asyncHandler( async (req, res) => {
-
-    const studentBranch = req.student?.branch
-
-    if (!studentBranch) {
-        throw new ApiError(401, "Invalid Access token")
-    }
-
-    
-    const taskList = await Task.find({branch: studentBranch})
-
-    const taskListWithRewards = await Promise.all(
-        taskList.map(async (task) => {
-          const reward = await calculateReward(task.hours, task.difficulty)
-
-          const frontEndAttributes = {
-            _id: task._id,
-            name: task.name,
-            description: task.description,
-            branch: task.branch,
-            category: task.category,
-            slot: task.slotsLeft,
-            reward: reward,
-          }
-  
-          return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
-        })
-      )
-
-    return res.status(201).json(
-        new ApiResponse(200, taskListWithRewards, "Fetched All tasks for student successfully")
-    )
-
-})
-
 async function calculateReward(hours, difficulty) {
     try {
         const baseMultiplierdata = await Variable.findById(process.env.BASE_MULTIPLIER_ID)
@@ -386,40 +381,186 @@ async function calculateReward(hours, difficulty) {
   }
 
 const submitProof = asyncHandler(async (req, res) => {
+    const { taskId } = req.body
+    const studentId = req.student?._id
+    const taskDetails = await AcceptedTask.findById({ taskId: taskId, studentId: studentId })
+    if (!taskDetails) {
+        throw new ApiError(404, "This task is not accepted by student")
+    }
+    if (!req.file) {
+        throw new ApiError(400, 'Proof file is required')
+    }
+    if (taskDetails.isSubmitted===true) {
+        throw new ApiError(400, "Student has already submitted this task")
+    }
+    else{
+        try {
+            const proofLocalPath = req.file.path;
+            const proofOnCloudinary = await uploadOnCloudinary(proofLocalPath)
+    
+            if (!proofOnCloudinary) {
+                throw new ApiError(500, 'Failed to upload proof file to Cloudinary')
+            }
+    
+            taskDetails.proof = proofOnCloudinary.url
+            taskDetails.isSubmitted = true
+            await taskDetails.save()
+    
+            return res.status(200).json(new ApiResponse(200, taskDetails, "Request sent to faculty successfully"))
+        } catch (error) {
+            return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' })
+        }
+    }
+});
+
+const rejectedTasksofStudent = asyncHandler(async (req, res) => {
     try {
-        const { taskId } = req.body;
         const studentId = req.student?._id
-        const taskDetails = await Task.findById(taskId);
 
-        if (!taskDetails) {
-            throw new ApiError(404, "Task not found");
-        }
-        const facultyId = taskDetails.facultyName;
-        if (!req.file) {
-            throw new ApiError(400, 'Proof file is required');
+        const rejectedTasks = await AcceptedTask.findOne({ studentId: studentId, isRejected: true });
+         
+        if (!rejectedTasks) {
+            throw new ApiError(404, 'No rejected tasks to show');
         }
 
-        const proofLocalPath = req.file.path;
-        const proofOnCloudinary = await uploadOnCloudinary(proofLocalPath);
-
-        if (!proofOnCloudinary) {
-            throw new ApiError(500, 'Failed to upload proof file to Cloudinary');
-        }
-        const PendingApprovalTasksDetails = await PendingApprovalTasks.create({
-            taskId: taskId,
-            facultyId: facultyId,
-            studentId: studentId,
-            proof: proofOnCloudinary.url
-        });
-
-        return res.status(200).json(new ApiResponse(200, PendingApprovalTasksDetails, "Request sent to faculty successfully"));
+        return res.status(200).json(new ApiResponse(200, rejectedTasks, "Rejected Tasks fetched successfuly"));
     } catch (error) {
         return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
     }
 });
 
+const resubmitProof = asyncHandler(async (req, res) => {
+    try {
+        const { taskId } = req.body
+        const studentId = req.student?._id
+        const taskDetails = await AcceptedTask.findById({ taskId: taskId, studentId: studentId })
 
+        if (!taskDetails) {
+            throw new ApiError(400, "This task is not accepted by student")
+        }
+        if (!req.file) {
+            throw new ApiError(400, 'Proof file is required')
+        }
 
+        const proofLocalPath = req.file.path;
+        const proofOnCloudinary = await uploadOnCloudinary(proofLocalPath)
+
+        if (!proofOnCloudinary) {
+            throw new ApiError(500, 'Failed to upload proof file to Cloudinary')
+        }
+
+        const resubmittedTask = await AcceptedTask.findOne({ taskId: taskId, studentId: studentId, isRejected: true})
+         
+        if (!resubmittedTask) {
+            throw new ApiError(404, 'Task not found')
+        }
+
+        resubmittedTask.proof = proofOnCloudinary.url
+        resubmittedTask.isRejected = false
+
+        await resubmittedTask.save()
+
+        return res.status(200).json(new ApiResponse(200, resubmittedTask, "Updated Request sent to faculty again successfully"))
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' })
+    }
+});
+
+const getCompletedTasksOfStudent = asyncHandler(async (req, res) => {
+    const studentId = req.student?._id
+    const taskList = await CompletedTasks.find({studentId: studentId})
+    if (!taskList) {
+        throw new ApiError(404, 'No completed tasks to show');
+    }
+    return res.status(200).json(
+        new ApiResponse(200, taskList, "Fetched All tasks Rejected by faculty successfully")
+    )
+})
+
+const getRewards = asyncHandler( async (_, res) => {
+    const rewardList = await Reward.find({});
+    return res.status(201).json(
+        new ApiResponse(200, rewardList, "Fetched All tasks for student successfully")
+    )
+
+})
+
+const claimReward = asyncHandler(async (req, res) => {
+    const {rewardId, privateKey} = req.body
+
+    const studentId = req.student?._id
+    
+    const RewardDetails = await Task.findById(rewardId)
+    if(!RewardDetails){
+        throw new ApiError(404, "Reward not found")
+    }
+
+    const currentSlotValue = RewardDetails.slotsLeft
+
+    const isRewardAlreadyClaimed = await AcceptedReward.findOne({ studentId, rewardId })
+    if (isRewardAlreadyClaimed) {
+        throw new ApiError(400, "Student has already claimed this reward")
+    }
+    else{
+        if(currentSlotValue >=1){
+            const slotAccepted = (RewardDetails.slot - currentSlotValue) + 1
+            transfer(RewardDetails.cost, privateKey, studentId.walletAdd)
+        
+            const claimedRewardDetails = await AcceptedReward.create({
+                studentId,
+                rewardId,
+                slotAccepted
+        
+            })
+            await Reward.findByIdAndUpdate(
+                rewardId,
+                {
+                    $set: {
+                        slotsLeft: currentSlotValue - 1
+                    }
+                },
+                {new: true}
+                
+            )
+        
+            return res
+            .status(200)
+            .json(new ApiResponse(200, claimedRewardDetails, "Account details updated successfully"))
+        
+        }
+        else{
+            throw new ApiError(502, "No slots Available for this task")
+        }
+    }
+})
+
+async function transfer(value,privateKey,fromAddress) {
+    try {
+        const web3 = new Web3(new Web3.providers.HttpProvider('HTTP://127.0.0.1:7545'));
+        const weivalue = web3.utils.toWei(value, 'ether');
+
+        async function sendSigned() {
+            const accounts = await web3.eth.getAccounts();
+            const toAddress = accounts[0];
+            // Create a new transaction object
+            const tx = {
+            from: fromAddress,
+            to: toAddress,
+            value: weivalue
+            };
+
+    // Sign the transaction with the private key
+    const signedTx = await web3.eth.accounts.signTransaction(tx, privateKey);
+
+    // Send the signed transaction to the network
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    return receipt;
+    }  
+    } catch (error) {
+        throw new ApiError(500, "Something went wrong while calculating reward")
+    }
+  }
 
 
 export {
@@ -433,5 +574,10 @@ export {
     acceptTask,
     getTasksForStudent,
     getAcceptedTasks,
-    submitProof
+    submitProof,
+    rejectedTasksofStudent,
+    resubmitProof,
+    getCompletedTasksOfStudent,
+    getRewards,
+    claimReward
  }
