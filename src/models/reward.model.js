@@ -61,6 +61,11 @@ const AcceptedRewardSchema = new Schema({
         required: true,
     },
 
+    TransactionId: {
+        type: String,
+        required: true
+    },
+
 },
 {timestamps: true})
 

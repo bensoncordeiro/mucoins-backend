@@ -5,8 +5,6 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import { AcceptedTask, Task, CompletedTasks } from "../models/task.model.js"
 import { Student } from "../models/student.model.js"
 import { Web3 } from 'web3';
-import fs from 'fs';
-import path from 'path';
 import jwt from "jsonwebtoken"
 
 const generateAccessAndRefereshTokens = async(facultyId) =>{
@@ -215,10 +213,6 @@ const changeCurrentPassword = asyncHandler(async(req, res) => {
 const addTask = asyncHandler(async (req, res) => {
     const { name, description, branch, hours, category, difficulty, slot } = req.body
 
-    if (!incomingAccessToken) {
-        throw new ApiError(401, "Faculty not logged in")
-    }
-
     if (![name, description, hours, category, difficulty, slot].every(field => typeof field === 'string' && field.trim() !== "")) {
         throw new ApiError(400, "All fields are required")
     }
@@ -313,9 +307,10 @@ const rejectTask = asyncHandler(async (req, res) => {
             throw new ApiError(400, 'Reason is required to reject the task');
         }
         const taskToBeRejected = await AcceptedTask.findOneAndUpdate(
-            { _id: taskId, studentId: studentId },
+            { taskId: taskId, studentId: studentId },
             { isRejected: true, isSubmitted: false, reason: reason },
             { new: true }
+
         )
         if (!taskToBeRejected) {
             throw new ApiError(500, 'Something went wrong while rejecting the task');
@@ -329,17 +324,18 @@ const rejectTask = asyncHandler(async (req, res) => {
 
 const approveTask = asyncHandler(async (req, res) => {
     try {
-        const { taskId,studentId, reason } = req.body
+        const { taskId,studentId,reason } = req.body
+    
         if(!reason){
             throw new ApiError(400, 'Reason is required to accept the task');
         }
         
-        const completedTask = await AcceptedTask.findOne({ studentId, taskId });
+        const completedTask = await AcceptedTask.findOne({ taskId: taskId, studentId: studentId });
         if (!completedTask) {
             throw new ApiError(404, 'Task not found');
         }
 
-        const studentDetails = await Student.findOne(studentId)
+        const studentDetails = await Student.findOne({_id : studentId})
         const transactionId = await transfer(completedTask.rewardValue, studentDetails.walletAdd)
 
         const insertedInCompletedTask = await CompletedTasks.create({
@@ -353,7 +349,7 @@ const approveTask = asyncHandler(async (req, res) => {
             transactionId: transactionId
         });
 
-    await CompletedTasks.deleteOne({ studentId: studentId, taskId: taskId });
+    await AcceptedTask.deleteOne({ studentId: studentId, taskId: taskId });
 
         return res.status(200).json(new ApiResponse(200, insertedInCompletedTask, "Task Approved successfully...Reward has been credited in the student's wallet!"));
     } catch (error) {
@@ -364,20 +360,29 @@ const approveTask = asyncHandler(async (req, res) => {
 async function transfer(value,toaddress) {
     try {
         const web3 = new Web3(new Web3.providers.HttpProvider('HTTP://127.0.0.1:7545'));
-    
-        const accounts = await web3.eth.getAccounts();
-        //100 Eth = 10^18 wei
-    
-        //create a transaction sending 1 Ether from account 0 to account 1
-        const transaction = {
-          from: accounts[0],
-          to: toaddress,
-          value: web3.utils.toWei(value, 'ether'),
-        };
-      
-        //send the actual transaction
-        const transactionHash = await web3.eth.sendTransaction(transaction);
-        return transactionHash
+        const weivalue = web3.utils.toWei(value, 'ether');
+        const returnedvalue = await sendSigned()
+        async function sendSigned() {
+            const fromAddress = process.env.ADMIN_WALLET_ADDRESS;
+            const toAddress = toaddress;
+        
+            const tx = {
+              from: fromAddress,
+              to: toAddress,
+              value: weivalue,
+              gas: 21000,
+              gasPrice: web3.utils.toWei('10', 'gwei'),
+              nonce: await web3.eth.getTransactionCount(fromAddress),
+            };
+
+    // Sign the transaction with the private key
+    const signedTx = await web3.eth.accounts.signTransaction(tx, process.env.ADMIN_WALLET_PRIVATE_KEY);
+
+    // Send the signed transaction to the network
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    return receipt.transactionHash
+    }  
+    return returnedvalue
       
     } catch (error) {
         throw new ApiError(500, "Something went wrong while calculating reward")

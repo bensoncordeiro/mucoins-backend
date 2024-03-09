@@ -383,7 +383,7 @@ async function calculateReward(hours, difficulty) {
 const submitProof = asyncHandler(async (req, res) => {
     const { taskId } = req.body
     const studentId = req.student?._id
-    const taskDetails = await AcceptedTask.findById({ taskId: taskId, studentId: studentId })
+    const taskDetails = await AcceptedTask.findOne({ taskId: taskId, studentId: studentId })
     if (!taskDetails) {
         throw new ApiError(404, "This task is not accepted by student")
     }
@@ -433,7 +433,7 @@ const resubmitProof = asyncHandler(async (req, res) => {
     try {
         const { taskId } = req.body
         const studentId = req.student?._id
-        const taskDetails = await AcceptedTask.findById({ taskId: taskId, studentId: studentId })
+        const taskDetails = await AcceptedTask.findOne({ taskId: taskId, studentId: studentId })
 
         if (!taskDetails) {
             throw new ApiError(400, "This task is not accepted by student")
@@ -449,7 +449,7 @@ const resubmitProof = asyncHandler(async (req, res) => {
             throw new ApiError(500, 'Failed to upload proof file to Cloudinary')
         }
 
-        const resubmittedTask = await AcceptedTask.findOne({ taskId: taskId, studentId: studentId, isRejected: true})
+        const resubmittedTask = await AcceptedTask.findOne({ taskId: taskId, studentId: studentId,isRejected: true})
          
         if (!resubmittedTask) {
             throw new ApiError(404, 'Task not found')
@@ -457,6 +457,7 @@ const resubmitProof = asyncHandler(async (req, res) => {
 
         resubmittedTask.proof = proofOnCloudinary.url
         resubmittedTask.isRejected = false
+        resubmittedTask.isSubmitted = true
 
         await resubmittedTask.save()
 
@@ -489,8 +490,8 @@ const claimReward = asyncHandler(async (req, res) => {
     const {rewardId, privateKey} = req.body
 
     const studentId = req.student?._id
-    
-    const RewardDetails = await Task.findById(rewardId)
+    const studentDetails = await Student.findById(studentId)
+    const RewardDetails = await Reward.findById(rewardId)
     if(!RewardDetails){
         throw new ApiError(404, "Reward not found")
     }
@@ -504,12 +505,13 @@ const claimReward = asyncHandler(async (req, res) => {
     else{
         if(currentSlotValue >=1){
             const slotAccepted = (RewardDetails.slot - currentSlotValue) + 1
-            transfer(RewardDetails.cost, privateKey, studentId.walletAdd)
-        
+            const receipt = await transfer(RewardDetails.cost, privateKey, studentDetails.walletAdd)
+            
             const claimedRewardDetails = await AcceptedReward.create({
                 studentId,
                 rewardId,
-                slotAccepted
+                slotAccepted,
+                TransactionId: receipt
         
             })
             await Reward.findByIdAndUpdate(
@@ -525,7 +527,7 @@ const claimReward = asyncHandler(async (req, res) => {
         
             return res
             .status(200)
-            .json(new ApiResponse(200, claimedRewardDetails, "Account details updated successfully"))
+            .json(new ApiResponse(200, claimedRewardDetails, "Reward Claimed Successfully"))
         
         }
         else{
@@ -538,15 +540,18 @@ async function transfer(value,privateKey,fromAddress) {
     try {
         const web3 = new Web3(new Web3.providers.HttpProvider('HTTP://127.0.0.1:7545'));
         const weivalue = web3.utils.toWei(value, 'ether');
-
+        const returnedvalue = await sendSigned()
         async function sendSigned() {
-            const accounts = await web3.eth.getAccounts();
-            const toAddress = accounts[0];
+            const toAddress = process.env.ADMIN_WALLET_ADDRESS;
+            const sendto = fromAddress
             // Create a new transaction object
             const tx = {
-            from: fromAddress,
+            from: sendto,
             to: toAddress,
-            value: weivalue
+            value: weivalue,
+            gas: 21000,
+            gasPrice: web3.utils.toWei('10', 'gwei'),
+            nonce: await web3.eth.getTransactionCount(fromAddress)
             };
 
     // Sign the transaction with the private key
@@ -554,11 +559,11 @@ async function transfer(value,privateKey,fromAddress) {
 
     // Send the signed transaction to the network
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-
-    return receipt;
+    return receipt.transactionHash
     }  
+    return returnedvalue
     } catch (error) {
-        throw new ApiError(500, "Something went wrong while calculating reward")
+        throw new ApiError(500, error.message || "TransferFailed")
     }
   }
 

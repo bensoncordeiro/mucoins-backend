@@ -17,14 +17,12 @@ app.use(cookieParser())
 // import routes
 import facultyRouter from './routes/faculty.routes.js'
 import studentRouter from './routes/student.routes.js'
-import taskRouter from './routes/task.routes.js'
 import adminRouter from './routes/admin.routes.js'
 
 
 //routes declaration 
 app.use("/api/v1/faculty",facultyRouter)
 app.use("/api/v1/student",studentRouter)
-app.use("/api/v1/task",taskRouter)
 app.use("/api/v1/admin",adminRouter)
 
 export { app }

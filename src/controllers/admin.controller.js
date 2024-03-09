@@ -1,7 +1,9 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
 import {ApiError} from "../utils/ApiError.js"
 import { Variable, Adminuser } from "../models/admin.model.js"
+import { Reward } from "../models/reward.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
+import jwt from "jsonwebtoken"
 
 const setBaseMul = asyncHandler( async (req, res) => {
     
@@ -31,6 +33,17 @@ const setBaseMul = asyncHandler( async (req, res) => {
         new ApiResponse(200, checkStoredBaseMul, "Value set Successfully")
     )
 })
+
+const getBaseMul = asyncHandler(async(req, res) => {
+    const baseMul = await Variable.findById(process.env.BASE_MULTIPLIER_ID);
+
+    if (!baseMul) {
+        throw new ApiError(404, "Base Multiplier not found");
+    }
+
+    return res.status(200).json(new ApiResponse(200, baseMul.baseMul, "Base Multiplier fetched successfully"));
+})
+
 
 const updateBaseMul = asyncHandler(async(req, res) => {
     const { baseMul } = req.body
@@ -299,19 +312,11 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
 const addReward = asyncHandler(async (req, res) => {
     const { name,description,category,cost,slot } = req.body
 
-    if (![name, description, hours, category, difficulty, slot].every(field => typeof field === 'string' && field.trim() !== "")) {
+    if (![name, description,category,slot].every(field => typeof field === 'string' && field.trim() !== "")) {
         throw new ApiError(400, "All fields are required")
     }
 
-    if (!Array.isArray(branch) || branch.length === 0) {
-        throw new ApiError(400, "At least one branch must be selected")
-    }
-
-    if (branch.some(branchItem => typeof branchItem !== 'string' || branchItem.trim() === '')) {
-        throw new ApiError(400, "Branch names must be non-empty strings")
-    }
-
-    const reward = await Task.create({
+    const reward = await Reward.create({
         name,
         description,
         category,
@@ -337,5 +342,6 @@ export {
     changeCurrentPassword,
     getCurrentAdmin,
     updateAccountDetails,
-    addReward
+    addReward,
+    getBaseMul
  }
