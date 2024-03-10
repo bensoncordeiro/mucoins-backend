@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginStudent, logoutStudent, refreshAccessTokenStudent, registerStudent, getCurrentStudent, updateAccountDetails, acceptTask , getTasksForStudent, getAcceptedTasks, submitProof,rejectedTasksofStudent,resubmitProof,claimReward,getCompletedTasksOfStudent,getRewards,changeCurrentPassword } from "../controllers/student.controller.js";
+import { loginStudent, logoutStudent, refreshAccessTokenStudent, registerStudent, getCurrentStudent, updateAccountDetails, acceptTask , getTasksForStudent, getAcceptedTasks, submitProof,rejectedTasksofStudent,resubmitProof,claimReward,getCompletedTasksOfStudent,getRewards,changeCurrentPassword,getSubmittedTasks } from "../controllers/student.controller.js";
 import { verifyJWTstudent } from "../middlewares/auth.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
 
@@ -12,6 +12,8 @@ router.route("/acceptedTasks").get(verifyJWTstudent,getAcceptedTasks) //working
 router.route("/rejectedTasks").get(verifyJWTstudent,rejectedTasksofStudent) //working
 router.route("/completedTasks").get(verifyJWTstudent,getCompletedTasksOfStudent) //working
 router.route("/rewards").get(verifyJWTstudent,getRewards) //working
+router.route("/submittedTasks").get(verifyJWTstudent,getSubmittedTasks)
+
 
 router.route("/registerstudent").post(registerStudent)  //working
 router.route("/loginstudent").post(loginStudent)  //working

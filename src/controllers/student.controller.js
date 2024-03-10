@@ -358,6 +358,37 @@ const getAcceptedTasks = asyncHandler(async (req, res) => {
     );
 });
 
+const getSubmittedTasks = asyncHandler(async (req, res) => {
+    const studentId = req.student?._id;
+
+    const submittedTasks = await AcceptedTask.find({ studentId, isSubmitted: true, isRejected: false });
+
+    if (!submittedTasks || submittedTasks.length === 0) {
+        return res.status(404).json(new ApiResponse(404, null, "No submitted tasks found for this student"));
+    }
+
+    const taskListDetails = await Promise.all(
+        submittedTasks.map(async (acceptedTask) => {
+            const task = await Task.findById(acceptedTask.taskId);
+            const taskDetails = {
+                _id: task._id,
+                name: task.name,
+                description: task.description,
+                branch: task.branch,
+                category: task.category,
+                reward: acceptedTask.rewardValue,
+                reason: acceptedTask.reason, 
+                submittedon: acceptedTask.updatedAt
+            };
+
+            return taskDetails;
+        })
+    );
+
+    return res.status(200).json(
+        new ApiResponse(200, taskListDetails, "Fetched all accepted tasks for the student successfully")
+    );
+});
 
 async function calculateReward(hours, difficulty) {
     try {
@@ -584,5 +615,6 @@ export {
     resubmitProof,
     getCompletedTasksOfStudent,
     getRewards,
-    claimReward
+    claimReward,
+    getSubmittedTasks
  }
