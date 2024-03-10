@@ -379,6 +379,7 @@ const getSubmittedTasks = asyncHandler(async (req, res) => {
                 reward: acceptedTask.rewardValue,
                 reason: acceptedTask.reason, 
                 submittedon: acceptedTask.updatedAt
+                
             };
 
             return taskDetails;

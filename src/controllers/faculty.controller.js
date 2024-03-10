@@ -295,8 +295,29 @@ const getTasksForApprovalOfFaculty = asyncHandler(async (req, res) => {
     if (!taskListForApproval) {
         throw new ApiError(404, 'No Tasks found for Approval of faculty');
     }
+
+    const taskListDetails = await Promise.all(
+        taskListForApproval.map(async (acceptedTask) => {
+            const task = await Task.findById(acceptedTask.taskId);
+            const studentDetails = await Student.findById(acceptedTask.studentId);
+            const taskDetails = {
+                _id: task._id,
+                taskName: task.name,
+                taskDescription: task.description,
+                taskBranch: task.branch,
+                taskCategory: task.category,
+                taskRewardValue: acceptedTask.rewardValue,
+                studentName: studentDetails.name,
+                studentRollno: studentDetails.rollNo,
+                studentBranch: studentDetails.branch,
+                submittedOn: acceptedTask.updatedAt
+            };
+
+            return taskDetails;
+        })
+    );
     return res.status(200).json(
-        new ApiResponse(200, taskListForApproval, "Fetched All tasks for Approval of faculty successfully")
+        new ApiResponse(200, taskListDetails, "Fetched All tasks for Approval of faculty successfully")
     )
 })
 
@@ -385,7 +406,7 @@ async function transfer(value,toaddress) {
     return returnedvalue
       
     } catch (error) {
-        throw new ApiError(500, "Something went wrong while calculating reward")
+        throw new ApiError(500, error?.message || "Something went wrong while calculating reward")
     }
   }
 
@@ -395,8 +416,28 @@ const getApprovedTasksOfFaculty = asyncHandler(async (req, res) => {
     if (!taskList) {
         throw new ApiError(404, 'No tasks to show');
     }
+    const taskListDetails = await Promise.all(
+        taskList.map(async (CompletedTasks) => {
+            const task = await Task.findById(CompletedTasks.taskId);
+            const studentDetails = await Student.findById(CompletedTasks.studentId);
+            const taskDetails = {
+                _id: task._id,
+                taskName: task.name,
+                taskDescription: task.description,
+                taskBranch: task.branch,
+                taskCategory: task.category,
+                taskRewardValue: task.rewardValue,
+                studentName: studentDetails.name,
+                studentRollno: studentDetails.rollNo,
+                studentBranch: studentDetails.branch,
+                acceptedOn: taskList.createdAt
+            };
+
+            return taskDetails;
+        })
+    );
     return res.status(200).json(
-        new ApiResponse(200, taskList, "Fetched All tasks for faculty successfully")
+        new ApiResponse(200, taskListDetails, "Fetched All tasks for faculty successfully")
     )
 })
 
