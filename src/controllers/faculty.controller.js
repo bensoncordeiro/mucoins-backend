@@ -307,6 +307,7 @@ const getTasksForApprovalOfFaculty = asyncHandler(async (req, res) => {
                 taskBranch: task.branch,
                 taskCategory: task.category,
                 taskRewardValue: acceptedTask.rewardValue,
+                uploadedProof: acceptedTask.proof,
                 studentId: acceptedTask.studentId,
                 studentName: studentDetails.name,
                 studentRollno: studentDetails.rollNo,
