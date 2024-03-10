@@ -447,8 +447,28 @@ const getTasksRejectedByFaculty = asyncHandler(async (req, res) => {
     if (!taskList) {
         throw new ApiError(404, 'No tasks to show');
     }
+    const taskListDetails = await Promise.all(
+        taskList.map(async (acceptedTask) => {
+            const task = await Task.findById(acceptedTask.taskId);
+            const studentDetails = await Student.findById(acceptedTask.studentId);
+            const taskDetails = {
+                _id: task._id,
+                taskName: task.name,
+                taskDescription: task.description,
+                taskBranch: task.branch,
+                taskCategory: task.category,
+                taskRewardValue: acceptedTask.rewardValue,
+                studentName: studentDetails.name,
+                studentRollno: studentDetails.rollNo,
+                studentBranch: studentDetails.branch,
+                submittedOn: acceptedTask.updatedAt
+            };
+
+            return taskDetails;
+        })
+    );
     return res.status(200).json(
-        new ApiResponse(200, taskList, "Fetched All tasks Rejected by faculty successfully")
+        new ApiResponse(200, taskListDetails, "Fetched All tasks Rejected by faculty successfully")
     )
 })
 
