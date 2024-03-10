@@ -301,12 +301,13 @@ const getTasksForApprovalOfFaculty = asyncHandler(async (req, res) => {
             const task = await Task.findById(acceptedTask.taskId);
             const studentDetails = await Student.findById(acceptedTask.studentId);
             const taskDetails = {
-                _id: task._id,
+                taskId: task._id,
                 taskName: task.name,
                 taskDescription: task.description,
                 taskBranch: task.branch,
                 taskCategory: task.category,
                 taskRewardValue: acceptedTask.rewardValue,
+                studentId: acceptedTask.studentId,
                 studentName: studentDetails.name,
                 studentRollno: studentDetails.rollNo,
                 studentBranch: studentDetails.branch,
