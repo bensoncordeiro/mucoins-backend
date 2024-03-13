@@ -290,37 +290,117 @@ const getSubmittedTasksOfFaculty = asyncHandler(async (req, res) => {
 
 
 const getTasksForApprovalOfFaculty = asyncHandler(async (req, res) => {
-    const facultyId = req.faculty?._id
-    const taskListForApproval = await AcceptedTask.find({facultyId: facultyId, isSubmitted: true, isRejected: false})
-    if (!taskListForApproval) {
-        throw new ApiError(404, 'No Tasks found for Approval of faculty');
+    try {
+        const facultyId = req.faculty?._id
+        // const taskListForApproval = await AcceptedTask.find({facultyId: facultyId, isSubmitted: true, isRejected: false})
+        // if (!taskListForApproval) {
+        //     throw new ApiError(404, 'No Tasks found for Approval of faculty');
+        // }
+    
+        // const taskListDetails = await Promise.all(
+        //     taskListForApproval.map(async (acceptedTask) => {
+        //         const task = await Task.findById(acceptedTask.taskId);
+        //         const studentDetails = await Student.findById(acceptedTask.studentId);
+        //         const taskDetails = {
+        //             taskId: task._id,
+        //             taskName: task.name,
+        //             taskDescription: task.description,
+        //             taskBranch: task.branch,
+        //             taskCategory: task.category,
+        //             taskRewardValue: acceptedTask.rewardValue,
+        //             uploadedProof: acceptedTask.proof,
+        //             studentId: acceptedTask.studentId,
+        //             studentName: studentDetails.name,
+        //             studentRollno: studentDetails.rollNo,
+        //             studentBranch: studentDetails.branch,
+        //             submittedOn: acceptedTask.updatedAt
+        //         };
+    
+        //         return taskDetails;
+        //     })
+        // );
+        // return res.status(200).json(
+        //     new ApiResponse(200, taskListDetails, "Fetched All tasks for Approval of faculty successfully")
+        // )
+
+        const pipeline = [
+            {
+              '$match': { 
+                'isSubmitted': true,
+                'isRejected': false,
+                'facultyId': facultyId
+              }
+            }, {
+              '$lookup': {
+                'from': 'tasks', 
+                'localField': 'taskId', 
+                'foreignField': '_id', 
+                'as': 'taskDetails'
+              }
+            }, {
+              '$addFields': {
+                'taskDetails': {
+                  '$arrayElemAt': [
+                    '$taskDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$lookup': {
+                'from': 'students', 
+                'localField': 'studentId', 
+                'foreignField': '_id', 
+                'as': 'studentDetails'
+              }
+            }, {
+              '$addFields': {
+                'studentDetails': {
+                  '$arrayElemAt': [
+                    '$studentDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$project': {
+                'studentId': 1, 
+                'taskId': 1, 
+                'facultyId': 1, 
+                'isSubmitted': 1, 
+                'createdAt': 1, 
+                '_id': 1, 
+                'rewardValue': 1, 
+                'slotAccepted': 1, 
+                'isRejected': 1, 
+                'proof': 1,
+                'updatedAt': 1, 
+                '__v': 1, 
+                
+                'taskDetails.name': 1, 
+                'taskDetails.description': 1, 
+                'taskDetails.category': 1, 
+                'taskDetails.slot': 1, 
+                'taskDetails.branch': 1, 
+
+                'studentDetails.name': 1, 
+                'studentDetails.rollNo': 1, 
+                'studentDetails.branch': 1,
+                'studentDetails.collEmail': 1,
+                'studentDetails.phoneNumber': 1,
+              }
+            }
+          ];
+      
+          const pendingTaskListDetails = await AcceptedTask.aggregate(pipeline).exec();
+          if (!pendingTaskListDetails || pendingTaskListDetails.length === 0) {
+            return res.status(404).json(new ApiResponse(404, null, "No pending tasks for approval found for the faculty"));
+        }
+
+        return res.status(200).json(
+            new ApiResponse(200, pendingTaskListDetails, "Fetched all pending tasks for approval of the faculty successfully")
+        );
+    } catch (error) {
+        throw new ApiError(500, error.message || "Something went wrong while fetching tasks for approval")
     }
-
-    const taskListDetails = await Promise.all(
-        taskListForApproval.map(async (acceptedTask) => {
-            const task = await Task.findById(acceptedTask.taskId);
-            const studentDetails = await Student.findById(acceptedTask.studentId);
-            const taskDetails = {
-                taskId: task._id,
-                taskName: task.name,
-                taskDescription: task.description,
-                taskBranch: task.branch,
-                taskCategory: task.category,
-                taskRewardValue: acceptedTask.rewardValue,
-                uploadedProof: acceptedTask.proof,
-                studentId: acceptedTask.studentId,
-                studentName: studentDetails.name,
-                studentRollno: studentDetails.rollNo,
-                studentBranch: studentDetails.branch,
-                submittedOn: acceptedTask.updatedAt
-            };
-
-            return taskDetails;
-        })
-    );
-    return res.status(200).json(
-        new ApiResponse(200, taskListDetails, "Fetched All tasks for Approval of faculty successfully")
-    )
 })
 
 const rejectTask = asyncHandler(async (req, res) => {
@@ -341,7 +421,7 @@ const rejectTask = asyncHandler(async (req, res) => {
 
         return res.status(200).json(new ApiResponse(200, taskToBeRejected, "Task Rejected successfuly"));
     } catch (error) {
-        return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
+        throw new ApiError(500, error.message || "Task could not be rejected due to some error")
     }
 });
 
@@ -413,65 +493,223 @@ async function transfer(value,toaddress) {
   }
 
 const getApprovedTasksOfFaculty = asyncHandler(async (req, res) => {
-    const facultyId = req.faculty?._id
-    const taskList = await CompletedTasks.find({ facultyId: facultyId })
-    if (!taskList) {
-        throw new ApiError(404, 'No tasks to show');
-    }
-    const taskListDetails = await Promise.all(
-        taskList.map(async (CompletedTasks) => {
-            const task = await Task.findById(CompletedTasks.taskId);
-            const studentDetails = await Student.findById(CompletedTasks.studentId);
-            const taskDetails = {
-                _id: task._id,
-                taskName: task.name,
-                taskDescription: task.description,
-                taskBranch: task.branch,
-                taskCategory: task.category,
-                taskRewardValue: task.rewardValue,
-                studentName: studentDetails.name,
-                studentRollno: studentDetails.rollNo,
-                studentBranch: studentDetails.branch,
-                acceptedOn: taskList.createdAt
-            };
+   try {
+     const facultyId = req.faculty?._id
+    //  const taskList = await CompletedTasks.find({ facultyId: facultyId })
+    //  if (!taskList) {
+    //      throw new ApiError(404, 'No tasks to show');
+    //  }
+    //  const taskListDetails = await Promise.all(
+    //      taskList.map(async (CompletedTasks) => {
+    //          const task = await Task.findById(CompletedTasks.taskId);
+    //          const studentDetails = await Student.findById(CompletedTasks.studentId);
+    //          const taskDetails = {
+    //              _id: task._id,
+    //              taskName: task.name,
+    //              taskDescription: task.description,
+    //              taskBranch: task.branch,
+    //              taskCategory: task.category,
+    //              taskRewardValue: task.rewardValue,
+    //              studentName: studentDetails.name,
+    //              studentRollno: studentDetails.rollNo,
+    //              studentBranch: studentDetails.branch,
+    //              acceptedOn: taskList.createdAt
+    //          };
+ 
+    //          return taskDetails;
+    //      })
+    //  );
+    //  return res.status(200).json(
+    //      new ApiResponse(200, taskListDetails, "Fetched All tasks for faculty successfully")
+    //  )
+    const pipeline = [
+        {
+          '$match': { 
+            'facultyId': facultyId
+          }
+        }, {
+          '$lookup': {
+            'from': 'tasks', 
+            'localField': 'taskId', 
+            'foreignField': '_id', 
+            'as': 'taskDetails'
+          }
+        }, {
+          '$addFields': {
+            'taskDetails': {
+              '$arrayElemAt': [
+                '$taskDetails', 0
+              ]
+            }
+          }
+        }, {
+            '$lookup': {
+              'from': 'students', 
+              'localField': 'studentId', 
+              'foreignField': '_id', 
+              'as': 'studentDetails'
+            }
+          }, {
+            '$addFields': {
+              'studentDetails': {
+                '$arrayElemAt': [
+                  '$studentDetails', 0
+                ]
+              }
+            }
+          }, {
+            '$project': {
+              'studentId': 1, 
+              'taskId': 1, 
+              'facultyId': 1, 
+              'isSubmitted': 1,
+              'reason': 1,
+              'createdAt': 1, 
+              '_id': 1, 
+              'rewardValue': 1, 
+              'slotAccepted': 1, 
+              'proof': 1,
+              'transactionId': 1,
+              'updatedAt': 1, 
+              '__v': 1, 
 
-            return taskDetails;
-        })
-    );
+              'taskDetails.name': 1, 
+              'taskDetails.description': 1, 
+              'taskDetails.category': 1, 
+              'taskDetails.slot': 1, 
+              'taskDetails.branch': 1,
+
+              'studentDetails.name': 1, 
+              'studentDetails.rollNo': 1, 
+              'studentDetails.branch': 1,
+              'studentDetails.collEmail': 1,
+              'studentDetails.phoneNumber': 1,
+            }
+          }
+      ];
+  
+      const ApprovedTaskListDetails = await CompletedTasks.aggregate(pipeline).exec();
+      if (!ApprovedTaskListDetails || ApprovedTaskListDetails.length === 0) {
+        throw new ApiError(500, "No approved tasks found for this faculty")
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, taskListDetails, "Fetched All tasks for faculty successfully")
-    )
+        new ApiResponse(200, ApprovedTaskListDetails, "Fetched all rejected tasks for the student successfully")
+    );
+
+   } catch (error) {
+    throw new ApiError(500, error.message || "Something went wrong while fetching tasks for approved by faculty")
+   }
 })
 
 const getTasksRejectedByFaculty = asyncHandler(async (req, res) => {
-    const facultyId = req.faculty?._id
-    const taskList = await AcceptedTask.find({facultyId: facultyId, isRejected: true})
-    if (!taskList) {
-        throw new ApiError(404, 'No tasks to show');
-    }
-    const taskListDetails = await Promise.all(
-        taskList.map(async (acceptedTask) => {
-            const task = await Task.findById(acceptedTask.taskId);
-            const studentDetails = await Student.findById(acceptedTask.studentId);
-            const taskDetails = {
-                _id: task._id,
-                taskName: task.name,
-                taskDescription: task.description,
-                taskBranch: task.branch,
-                taskCategory: task.category,
-                taskRewardValue: acceptedTask.rewardValue,
-                studentName: studentDetails.name,
-                studentRollno: studentDetails.rollNo,
-                studentBranch: studentDetails.branch,
-                submittedOn: acceptedTask.updatedAt
-            };
+   try {
+     const facultyId = req.faculty?._id
+    //  const taskList = await AcceptedTask.find({facultyId: facultyId, isRejected: true})
+    //  if (!taskList) {
+    //      throw new ApiError(404, 'No tasks to show');
+    //  }
+    //  const taskListDetails = await Promise.all(
+    //      taskList.map(async (acceptedTask) => {
+    //          const task = await Task.findById(acceptedTask.taskId);
+    //          const studentDetails = await Student.findById(acceptedTask.studentId);
+    //          const taskDetails = {
+    //              _id: task._id,
+    //              taskName: task.name,
+    //              taskDescription: task.description,
+    //              taskBranch: task.branch,
+    //              taskCategory: task.category,
+    //              taskRewardValue: acceptedTask.rewardValue,
+    //              studentName: studentDetails.name,
+    //              studentRollno: studentDetails.rollNo,
+    //              studentBranch: studentDetails.branch,
+    //              submittedOn: acceptedTask.updatedAt
+    //          };
+ 
+    //          return taskDetails;
+    //      })
+    //  );
+    //  return res.status(200).json(
+    //      new ApiResponse(200, taskListDetails, "Fetched All tasks Rejected by faculty successfully")
+    //  )
+    const pipeline = [
+        {
+          '$match': { 
+            'isRejected': true,
+            'facultyId': facultyId
+          }
+        }, {
+          '$lookup': {
+            'from': 'tasks', 
+            'localField': 'taskId', 
+            'foreignField': '_id', 
+            'as': 'taskDetails'
+          }
+        }, {
+          '$addFields': {
+            'taskDetails': {
+              '$arrayElemAt': [
+                '$taskDetails', 0
+              ]
+            }
+          }
+        }, {
+            '$lookup': {
+              'from': 'students', 
+              'localField': 'studentId', 
+              'foreignField': '_id', 
+              'as': 'studentDetails'
+            }
+          }, {
+            '$addFields': {
+              'studentDetails': {
+                '$arrayElemAt': [
+                  '$studentDetails', 0
+                ]
+              }
+            }
+          }, {
+            '$project': {
+              'studentId': 1, 
+              'taskId': 1, 
+              'facultyId': 1, 
+              'isSubmitted': 1,
+              'reason': 1,
+              'createdAt': 1, 
+              '_id': 1, 
+              'rewardValue': 1, 
+              'slotAccepted': 1, 
+              'isRejected': 1, 
+              'proof': 1,
+              'updatedAt': 1, 
+              '__v': 1, 
 
-            return taskDetails;
-        })
-    );
+              'taskDetails.name': 1, 
+              'taskDetails.description': 1, 
+              'taskDetails.category': 1, 
+              'taskDetails.slot': 1, 
+              'taskDetails.branch': 1,
+
+              'studentDetails.name': 1, 
+              'studentDetails.rollNo': 1, 
+              'studentDetails.branch': 1,
+              'studentDetails.collEmail': 1,
+              'studentDetails.phoneNumber': 1,
+            }
+          }
+      ];
+  
+      const rejectedTaskListDetails = await AcceptedTask.aggregate(pipeline).exec();
+      if (!rejectedTaskListDetails || rejectedTaskListDetails.length === 0) {
+        return res.status(404).json(new ApiResponse(404, null, "No rejected tasks found for this student"));
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, taskListDetails, "Fetched All tasks Rejected by faculty successfully")
-    )
+        new ApiResponse(200, rejectedTaskListDetails, "Fetched all rejected tasks for the student successfully")
+    );
+   } catch (error) {
+    throw new ApiError(500, error.message || "Something went wrong while fetching tasks rejected by faculty")
+   }
 })
 
 export {

@@ -249,42 +249,119 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
 })
 
 const getTasksForStudent = asyncHandler( async (req, res) => {
-    const taskList = await Task.find({branch: req.student?.branch})
+   // const taskList = await Task.find({branch: req.student?.branch})
 
-    const taskListWithRewards = await Promise.all(
-        taskList.map(async (task) => {
-          const reward = await calculateReward(task.hours, task.difficulty)
+   
 
-          const frontEndAttributes = {
-            _id: task._id,
-            name: task.name,
-            description: task.description,
-            branch: task.branch,
-            category: task.category,
-            slot: task.slotsLeft,
-            reward: reward,
+    const pipeline = [
+        {
+          $lookup: {
+            from: 'acceptedtasks',
+            localField: '_id',
+            foreignField: 'taskId',
+            as: 'acceptedTasks',
+          },
+        },
+        {
+            $lookup: {
+                from: 'completedtasks',
+                localField: '_id',
+                foreignField: 'taskId',
+                as: 'completedTasks',
+              },
+        },
+        {
+          $match: {
+            acceptedTasks: { $eq: [] },
+            completedTasks: { $eq: [] },
+            branch: req.student?.branch,
+          },
+        },
+        {
+            '$lookup': {
+              'from': 'faculties', 
+              'localField': 'facultyId', 
+              'foreignField': '_id', 
+              'as': 'facultyDetails'
+            }
+          }, {
+            '$addFields': {
+              'facultyDetails': {
+                '$arrayElemAt': [
+                  '$facultyDetails', 0
+                ]
+              }
+            }
+          },
+        {
+            $project: {
+                name: 1,
+                description: 1,
+                branch: 1,
+                hours: 1,
+                category: 1,
+                difficulty: 1,
+                facultyId: 1,
+                slot: 1,
+                slotsLeft: 1,
+                'createdAt': 1,
+                'updatedAt': 1, 
+                '__v': 1,
+
+                'facultyDetails.name': 1, 
+                'facultyDetails.branch': 1, 
+                'facultyDetails.collEmail': 1
+              },
+        }
+      ];
+      
+      const EligibleTaskList = await Task.aggregate(pipeline).exec();
+
+      if (!EligibleTaskList || EligibleTaskList.length === 0) {
+        return res.status(404).json(new ApiResponse(404, null, "No eligible tasks found for the student"));
+    }
+    const taskListWithReward = await Promise.all(
+        EligibleTaskList.map(async task => {
+          const { hours, difficulty, ...taskWithoutHoursAndDifficulty } = task;
+          const reward = await calculateReward(hours, difficulty);
+    
+          return {
+            ...taskWithoutHoursAndDifficulty,
+            reward,
           }
+        }))
+
+        //   const frontEndAttributes = {
+        //     _id: task._id,
+        //     name: task.name,
+        //     description: task.description,
+        //     branch: task.branch,
+        //     category: task.category,
+        //     slot: task.slotsLeft,
+        //     reward: reward,
+        //   }
   
-          return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
-        })
-      )
+        //   return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
+      
 
     return res.status(201).json(
-        new ApiResponse(200, taskListWithRewards, "Fetched All tasks for student successfully")
+        new ApiResponse(200, taskListWithReward, "Fetched All tasks for student successfully")
     )
 
 })
 
 const acceptTask = asyncHandler(async(req, res) => {
-    const {taskId, reward} = req.body
+    const { taskId } = req.body
+    
 
     const studentId = req.student?._id
-    
+   
     const taskDetails = await Task.findById(taskId)
     if(!taskDetails){
         throw new ApiError(404, "Task not found")
     }
-
+    const reward =await calculateReward(taskDetails.hours, taskDetails.difficulty)
+console.log(reward)
     const currentSlotValue = taskDetails.slotsLeft
 
     const isTaskAlreadyAccepted = await AcceptedTask.findOne({ studentId, taskId })
@@ -318,7 +395,7 @@ const acceptTask = asyncHandler(async(req, res) => {
         
             return res
             .status(200)
-            .json(new ApiResponse(200, acceptedTaskDetails, "Account details updated successfully"))
+            .json(new ApiResponse(200, acceptedTaskDetails, "Task Accepted Successfully"))
         
         }
         else{
@@ -329,66 +406,210 @@ const acceptTask = asyncHandler(async(req, res) => {
 })
 
 const getAcceptedTasks = asyncHandler(async (req, res) => {
-    const studentId = req.student?._id;
+    try {
+        const studentId = req.student?._id;
+    
+        // const acceptedTasks = await AcceptedTask.find({ studentId, isSubmitted: false, isRejected: false });
+    
+    
+        // const taskListDetails = await Promise.all(
+        //     acceptedTasks.map(async (acceptedTask) => {
+        //         const task = await Task.findById(acceptedTask.taskId);
+        //         const taskDetails = {
+        //             _id: task._id,
+        //             name: task.name,
+        //             description: task.description,
+        //             branch: task.branch,
+        //             category: task.category,
+        //             reward: acceptedTask.rewardValue, 
+        //         };
+    
+        //         return taskDetails;
+        //     })
+        // );
+        const pipeline = [
+            {
+              '$match': {
+                'isSubmitted': false, 
+                'isRejected': false,
+                'studentId': studentId
+              }
+            }, {
+              '$lookup': {
+                'from': 'tasks', 
+                'localField': 'taskId', 
+                'foreignField': '_id', 
+                'as': 'taskDetails'
+              }
+            }, {
+              '$addFields': {
+                'taskDetails': {
+                  '$arrayElemAt': [
+                    '$taskDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$lookup': {
+                'from': 'faculties', 
+                'localField': 'facultyId', 
+                'foreignField': '_id', 
+                'as': 'facultyDetails'
+              }
+            }, {
+              '$addFields': {
+                'facultyDetails': {
+                  '$arrayElemAt': [
+                    '$facultyDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$project': {
+                'studentId': 1, 
+                'taskId': 1, 
+                'facultyId': 1, 
+                'isSubmitted': 1, 
+                'createdAt': 1, 
+                '_id': 1, 
+                'rewardValue': 1, 
+                'slotAccepted': 1, 
+                'isRejected': 1, 
+                'updatedAt': 1, 
+                '__v': 1, 
 
-    const acceptedTasks = await AcceptedTask.find({ studentId, isSubmitted: false, isRejected: false });
+                'taskDetails.name': 1, 
+                'taskDetails.description': 1, 
+                'taskDetails.category': 1, 
+                'taskDetails.slot': 1, 
+                'taskDetails.branch': 1,
 
-    if (!acceptedTasks || acceptedTasks.length === 0) {
-        return res.status(404).json(new ApiResponse(404, null, "No accepted tasks found for this student"));
+                'facultyDetails.name': 1, 
+                'facultyDetails.branch': 1, 
+                'facultyDetails.collEmail': 1
+              }
+            }
+          ];
+      
+          const AcceptedTaskListDetails = await AcceptedTask.aggregate(pipeline).exec();
+          if (!AcceptedTaskListDetails || AcceptedTaskListDetails.length === 0) {
+            return res.status(404).json(new ApiResponse(404, null, "No accepted tasks found for this student"));
+        }
+        
+        return res.status(200).json(
+            new ApiResponse(200, AcceptedTaskListDetails, "Fetched all accepted tasks for the student successfully")
+        );
+    } catch (error) {
+        throw new ApiError(500, error.message || "Something went wrong while fetching accepted tasks")
     }
-
-    const taskListDetails = await Promise.all(
-        acceptedTasks.map(async (acceptedTask) => {
-            const task = await Task.findById(acceptedTask.taskId);
-            const taskDetails = {
-                _id: task._id,
-                name: task.name,
-                description: task.description,
-                branch: task.branch,
-                category: task.category,
-                reward: acceptedTask.rewardValue, 
-            };
-
-            return taskDetails;
-        })
-    );
-
-    return res.status(200).json(
-        new ApiResponse(200, taskListDetails, "Fetched all accepted tasks for the student successfully")
-    );
 });
 
 const getSubmittedTasks = asyncHandler(async (req, res) => {
-    const studentId = req.student?._id;
+    try {
+        const studentId = req.student?._id;
+    
+        // const submittedTasks = await AcceptedTask.find({ studentId, isSubmitted: true, isRejected: false });
+    
+        // if (!submittedTasks || submittedTasks.length === 0) {
+        //     return res.status(404).json(new ApiResponse(404, null, "No submitted tasks found for this student"));
+        // }
+    
+        // const taskListDetails = await Promise.all(
+        //     submittedTasks.map(async (acceptedTask) => {
+        //         const task = await Task.findById(acceptedTask.taskId);
+        //         const taskDetails = {
+        //             _id: task._id,
+        //             name: task.name,
+        //             description: task.description,
+        //             branch: task.branch,
+        //             category: task.category,
+        //             reward: acceptedTask.rewardValue,
+        //             reason: acceptedTask.reason, 
+        //             submittedon: acceptedTask.updatedAt
+                    
+        //         };
+    
+        //        return taskDetails;
+    
+        //    })
+        // );
 
-    const submittedTasks = await AcceptedTask.find({ studentId, isSubmitted: true, isRejected: false });
+        const pipeline = [
+            {
+              '$match': {
+                'isSubmitted': true, 
+                'isRejected': false,
+                'studentId': studentId
+              }
+            }, {
+              '$lookup': {
+                'from': 'tasks', 
+                'localField': 'taskId', 
+                'foreignField': '_id', 
+                'as': 'taskDetails'
+              }
+            }, {
+              '$addFields': {
+                'taskDetails': {
+                  '$arrayElemAt': [
+                    '$taskDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$lookup': {
+                'from': 'faculties', 
+                'localField': 'facultyId', 
+                'foreignField': '_id', 
+                'as': 'facultyDetails'
+              }
+            }, {
+              '$addFields': {
+                'facultyDetails': {
+                  '$arrayElemAt': [
+                    '$facultyDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$project': {
+                'studentId': 1, 
+                'taskId': 1, 
+                'facultyId': 1, 
+                'isSubmitted': 1, 
+                'createdAt': 1, 
+                '_id': 1, 
+                'rewardValue': 1, 
+                'slotAccepted': 1, 
+                'isRejected': 1, 
+                'updatedAt': 1, 
+                '__v': 1, 
 
-    if (!submittedTasks || submittedTasks.length === 0) {
-        return res.status(404).json(new ApiResponse(404, null, "No submitted tasks found for this student"));
-    }
-
-    const taskListDetails = await Promise.all(
-        submittedTasks.map(async (acceptedTask) => {
-            const task = await Task.findById(acceptedTask.taskId);
-            const taskDetails = {
-                _id: task._id,
-                name: task.name,
-                description: task.description,
-                branch: task.branch,
-                category: task.category,
-                reward: acceptedTask.rewardValue,
-                reason: acceptedTask.reason, 
-                submittedon: acceptedTask.updatedAt
+                'taskDetails.name': 1, 
+                'taskDetails.description': 1, 
+                'taskDetails.category': 1, 
+                'taskDetails.slot': 1, 
+                'taskDetails.branch': 1,
                 
-            };
+                'facultyDetails.name': 1, 
+                'facultyDetails.branch': 1, 
+                'facultyDetails.collEmail': 1
+              }
+            }
+          ];
+      
+          const submittedTaskListDetails = await AcceptedTask.aggregate(pipeline).exec();
+          if (!submittedTaskListDetails || submittedTaskListDetails.length === 0) {
+            return res.status(404).json(new ApiResponse(404, null, "No accepted tasks found for this student"));
+        }
 
-            return taskDetails;
-        })
-    );
-
-    return res.status(200).json(
-        new ApiResponse(200, taskListDetails, "Fetched all accepted tasks for the student successfully")
-    );
+        return res.status(200).json(
+            new ApiResponse(200, submittedTaskListDetails, "Fetched all submitted tasks for the student successfully")
+        );
+    } catch (error) {
+        throw new ApiError(500, error.message || "Something went wrong while fetching submitted tasks")
+        
+    }
 });
 
 async function calculateReward(hours, difficulty) {
@@ -449,15 +670,88 @@ const rejectedTasksofStudent = asyncHandler(async (req, res) => {
     try {
         const studentId = req.student?._id
 
-        const rejectedTasks = await AcceptedTask.findOne({ studentId: studentId, isRejected: true });
+        // const rejectedTasks = await AcceptedTask.find({ studentId: studentId, isRejected: true });
          
-        if (!rejectedTasks) {
-            throw new ApiError(404, 'No rejected tasks to show');
+        // if (!rejectedTasks) {
+        //     throw new ApiError(404, 'No rejected tasks to show');
+        // }
+
+        // return res.status(200).json(new ApiResponse(200, rejectedTasks, "Rejected Tasks fetched successfuly")
+        const pipeline = [
+            {
+              '$match': { 
+                'isRejected': true,
+                'studentId': studentId
+              }
+            }, {
+              '$lookup': {
+                'from': 'tasks', 
+                'localField': 'taskId', 
+                'foreignField': '_id', 
+                'as': 'taskDetails'
+              }
+            }, {
+              '$addFields': {
+                'taskDetails': {
+                  '$arrayElemAt': [
+                    '$taskDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$lookup': {
+                'from': 'faculties', 
+                'localField': 'facultyId', 
+                'foreignField': '_id', 
+                'as': 'facultyDetails'
+              }
+            }, {
+              '$addFields': {
+                'facultyDetails': {
+                  '$arrayElemAt': [
+                    '$facultyDetails', 0
+                  ]
+                }
+              }
+            }, {
+              '$project': {
+                'studentId': 1, 
+                'taskId': 1, 
+                'facultyId': 1, 
+                'isSubmitted': 1, 
+                'createdAt': 1, 
+                '_id': 1, 
+                'rewardValue': 1, 
+                'slotAccepted': 1, 
+                'isRejected': 1, 
+                'reason': 1,
+                'proof': 1,
+                'updatedAt': 1, 
+                '__v': 1, 
+
+                'taskDetails.name': 1, 
+                'taskDetails.description': 1, 
+                'taskDetails.category': 1, 
+                'taskDetails.slot': 1, 
+                'taskDetails.branch': 1,
+
+                'facultyDetails.name': 1, 
+                'facultyDetails.branch': 1, 
+                'facultyDetails.collEmail': 1
+              }
+            }
+          ];
+      
+          const rejectedTaskListDetails = await AcceptedTask.aggregate(pipeline).exec();
+          if (!rejectedTaskListDetails || rejectedTaskListDetails.length === 0) {
+            throw new ApiError(500, error.message || "Something went wrong while fetching rejected tasks");
         }
 
-        return res.status(200).json(new ApiResponse(200, rejectedTasks, "Rejected Tasks fetched successfuly"));
+        return res.status(200).json(
+            new ApiResponse(200, rejectedTaskListDetails, "Fetched all rejected tasks for the student successfully")
+        );
     } catch (error) {
-        return res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
+        return res.status(error.statusCode || 500).json({ error: error.message || 'Something went wrong while fetching rejected tasks' });
     }
 });
 
@@ -500,14 +794,92 @@ const resubmitProof = asyncHandler(async (req, res) => {
 });
 
 const getCompletedTasksOfStudent = asyncHandler(async (req, res) => {
-    const studentId = req.student?._id
-    const taskList = await CompletedTasks.find({studentId: studentId})
-    if (!taskList) {
-        throw new ApiError(404, 'No completed tasks to show');
+    try {
+        const studentId = req.student?._id
+        // const taskList = await CompletedTasks.find({studentId: studentId})
+        // if (!taskList) {
+        //     throw new ApiError(404, 'No completed tasks to show');
+        // }
+        // return res.status(200).json(
+        //     new ApiResponse(200, taskList, "Fetched All tasks Rejected by faculty successfully")
+        // )
+
+        const pipeline = [
+            {
+              '$match': { 
+                'studentId': studentId
+              }
+            }, {
+              '$lookup': {
+                'from': 'tasks', 
+                'localField': 'taskId', 
+                'foreignField': '_id', 
+                'as': 'taskDetails'
+              }
+            }, {
+              '$addFields': {
+                'taskDetails': {
+                  '$arrayElemAt': [
+                    '$taskDetails', 0
+                  ]
+                }
+              }
+            }, {
+                '$lookup': {
+                    'from': 'faculties', 
+                    'localField': 'facultyId', 
+                    'foreignField': '_id', 
+                    'as': 'facultyDetails'
+                }
+              }, {
+                '$addFields': {
+                    'facultyDetails': {
+                      '$arrayElemAt': [
+                        '$facultyDetails', 0
+                      ]
+                  }
+                }
+              }, {
+                '$project': {
+                  'studentId': 1, 
+                  'taskId': 1, 
+                  'facultyId': 1, 
+                  'isSubmitted': 1,
+                  'reason': 1,
+                  'createdAt': 1, 
+                  '_id': 1, 
+                  'rewardValue': 1, 
+                  'slotAccepted': 1, 
+                  'proof': 1,
+                  'transactionId': 1,
+                  'updatedAt': 1, 
+                  '__v': 1, 
+
+                  'taskDetails.name': 1, 
+                  'taskDetails.description': 1, 
+                  'taskDetails.category': 1, 
+                  'taskDetails.branch': 1,
+                  'taskDetails.slot': 1,
+
+                  'facultyDetails.name': 1, 
+                  'facultyDetails.branch': 1, 
+                  'facultyDetails.collEmail': 1
+                }
+              }
+          ];
+      
+          const CompletedTaskListDetails = await CompletedTasks.aggregate(pipeline).exec();
+          if (!CompletedTaskListDetails || CompletedTaskListDetails.length === 0) {
+            throw new ApiError(500, "No completed tasks found for this student")
+        }
+    
+        return res.status(200).json(
+            new ApiResponse(200, CompletedTaskListDetails, "Fetched all completed tasks of the student successfully")
+        );
+    
+    } catch (error) {
+        throw new ApiError(500, error.message || "Something went wrong while fetching tasks completed by student")
     }
-    return res.status(200).json(
-        new ApiResponse(200, taskList, "Fetched All tasks Rejected by faculty successfully")
-    )
 })
 
 const getRewards = asyncHandler( async (_, res) => {
@@ -520,7 +892,6 @@ const getRewards = asyncHandler( async (_, res) => {
 
 const claimReward = asyncHandler(async (req, res) => {
     const {rewardId, privateKey} = req.body
-
     const studentId = req.student?._id
     const studentDetails = await Student.findById(studentId)
     const RewardDetails = await Reward.findById(rewardId)
