@@ -4,7 +4,7 @@ import { Faculty } from "../models/faculty.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { AcceptedTask, Task, CompletedTasks } from "../models/task.model.js"
 import { Student } from "../models/student.model.js"
-import { Web3 } from 'web3';
+import { Web3 } from 'web3'
 import jwt from "jsonwebtoken"
 
 const generateAccessAndRefereshTokens = async(facultyId) =>{
@@ -76,7 +76,6 @@ const loginFaculty = asyncHandler(async (req, res) =>{
         throw new ApiError(400, "name or email is required")
     }
     
-
     const faculty = await Faculty.findOne({
         $or: [{name}, {collEmail}]
     })
@@ -116,7 +115,6 @@ const loginFaculty = asyncHandler(async (req, res) =>{
 
 })
 
-
 const logoutFaculty = asyncHandler(async(req, res) => {
     await Faculty.findByIdAndUpdate(
         req.faculty._id,
@@ -141,8 +139,6 @@ const logoutFaculty = asyncHandler(async(req, res) => {
     .clearCookie("refreshToken", options)
     .json(new ApiResponse(200, {}, "Faculty logged Out"))
 })
-
-
 
 const refreshAccessTokenFaculty = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
@@ -252,7 +248,6 @@ const getCurrentFaculty = asyncHandler(async(req, res) => {
     ))
 })
 
-
 const updateAccountDetails = asyncHandler(async(req, res) => {
     const {name, collEmail} = req.body
 
@@ -288,41 +283,10 @@ const getSubmittedTasksOfFaculty = asyncHandler(async (req, res) => {
     )
 })
 
-
 const getTasksForApprovalOfFaculty = asyncHandler(async (req, res) => {
     try {
         const facultyId = req.faculty?._id
-        // const taskListForApproval = await AcceptedTask.find({facultyId: facultyId, isSubmitted: true, isRejected: false})
-        // if (!taskListForApproval) {
-        //     throw new ApiError(404, 'No Tasks found for Approval of faculty');
-        // }
-    
-        // const taskListDetails = await Promise.all(
-        //     taskListForApproval.map(async (acceptedTask) => {
-        //         const task = await Task.findById(acceptedTask.taskId);
-        //         const studentDetails = await Student.findById(acceptedTask.studentId);
-        //         const taskDetails = {
-        //             taskId: task._id,
-        //             taskName: task.name,
-        //             taskDescription: task.description,
-        //             taskBranch: task.branch,
-        //             taskCategory: task.category,
-        //             taskRewardValue: acceptedTask.rewardValue,
-        //             uploadedProof: acceptedTask.proof,
-        //             studentId: acceptedTask.studentId,
-        //             studentName: studentDetails.name,
-        //             studentRollno: studentDetails.rollNo,
-        //             studentBranch: studentDetails.branch,
-        //             submittedOn: acceptedTask.updatedAt
-        //         };
-    
-        //         return taskDetails;
-        //     })
-        // );
-        // return res.status(200).json(
-        //     new ApiResponse(200, taskListDetails, "Fetched All tasks for Approval of faculty successfully")
-        // )
-
+     
         const pipeline = [
             {
               '$match': { 
@@ -495,34 +459,8 @@ async function transfer(value,toaddress) {
 const getApprovedTasksOfFaculty = asyncHandler(async (req, res) => {
    try {
      const facultyId = req.faculty?._id
-    //  const taskList = await CompletedTasks.find({ facultyId: facultyId })
-    //  if (!taskList) {
-    //      throw new ApiError(404, 'No tasks to show');
-    //  }
-    //  const taskListDetails = await Promise.all(
-    //      taskList.map(async (CompletedTasks) => {
-    //          const task = await Task.findById(CompletedTasks.taskId);
-    //          const studentDetails = await Student.findById(CompletedTasks.studentId);
-    //          const taskDetails = {
-    //              _id: task._id,
-    //              taskName: task.name,
-    //              taskDescription: task.description,
-    //              taskBranch: task.branch,
-    //              taskCategory: task.category,
-    //              taskRewardValue: task.rewardValue,
-    //              studentName: studentDetails.name,
-    //              studentRollno: studentDetails.rollNo,
-    //              studentBranch: studentDetails.branch,
-    //              acceptedOn: taskList.createdAt
-    //          };
- 
-    //          return taskDetails;
-    //      })
-    //  );
-    //  return res.status(200).json(
-    //      new ApiResponse(200, taskListDetails, "Fetched All tasks for faculty successfully")
-    //  )
-    const pipeline = [
+     
+     const pipeline = [
         {
           '$match': { 
             'facultyId': facultyId
@@ -605,33 +543,7 @@ const getApprovedTasksOfFaculty = asyncHandler(async (req, res) => {
 const getTasksRejectedByFaculty = asyncHandler(async (req, res) => {
    try {
      const facultyId = req.faculty?._id
-    //  const taskList = await AcceptedTask.find({facultyId: facultyId, isRejected: true})
-    //  if (!taskList) {
-    //      throw new ApiError(404, 'No tasks to show');
-    //  }
-    //  const taskListDetails = await Promise.all(
-    //      taskList.map(async (acceptedTask) => {
-    //          const task = await Task.findById(acceptedTask.taskId);
-    //          const studentDetails = await Student.findById(acceptedTask.studentId);
-    //          const taskDetails = {
-    //              _id: task._id,
-    //              taskName: task.name,
-    //              taskDescription: task.description,
-    //              taskBranch: task.branch,
-    //              taskCategory: task.category,
-    //              taskRewardValue: acceptedTask.rewardValue,
-    //              studentName: studentDetails.name,
-    //              studentRollno: studentDetails.rollNo,
-    //              studentBranch: studentDetails.branch,
-    //              submittedOn: acceptedTask.updatedAt
-    //          };
- 
-    //          return taskDetails;
-    //      })
-    //  );
-    //  return res.status(200).json(
-    //      new ApiResponse(200, taskListDetails, "Fetched All tasks Rejected by faculty successfully")
-    //  )
+   
     const pipeline = [
         {
           '$match': { 

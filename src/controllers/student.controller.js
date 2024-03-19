@@ -9,7 +9,6 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import jwt from "jsonwebtoken"
 import { Web3 } from "web3";
 
-
 const generateAccessAndRefereshTokens = async(studentId) =>{
     try {
         const student = await Student.findById(studentId)
@@ -78,7 +77,6 @@ const loginStudent = asyncHandler(async (req, res) =>{
     if (!rollNo && !collEmail) {
         throw new ApiError(400, "rollno or email is required")
     }
-    
 
     const student = await Student.findOne({
         $or: [{rollNo}, {collEmail}]
@@ -116,7 +114,6 @@ const loginStudent = asyncHandler(async (req, res) =>{
             "Student logged In Successfully"
         )
     )
-
 })
 
 
@@ -196,9 +193,6 @@ const refreshAccessTokenStudent = asyncHandler(async (req, res) => {
 
 const changeCurrentPassword = asyncHandler(async(req, res) => {
     const {oldPassword, newPassword} = req.body
-
-    
-
     const student = await Student.findById(req.student?._id)
     const isPasswordCorrect = await student.isPasswordCorrect(oldPassword)
 
@@ -249,70 +243,82 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
 })
 
 const getTasksForStudent = asyncHandler( async (req, res) => {
-   // const taskList = await Task.find({branch: req.student?.branch})
 
-   
-
-    const pipeline = [
-        {
-          $lookup: {
-            from: 'acceptedtasks',
-            localField: '_id',
-            foreignField: 'taskId',
-            as: 'acceptedTasks',
-          },
-        },
-        {
-            $lookup: {
-                from: 'completedtasks',
-                localField: '_id',
-                foreignField: 'taskId',
-                as: 'completedTasks',
-              },
-        },
-        {
-          $match: {
-            acceptedTasks: { $eq: [] },
-            completedTasks: { $eq: [] },
-            branch: req.student?.branch,
-          },
-        },
-        {
-            '$lookup': {
-              'from': 'faculties', 
-              'localField': 'facultyId', 
-              'foreignField': '_id', 
-              'as': 'facultyDetails'
-            }
-          }, {
-            '$addFields': {
-              'facultyDetails': {
-                '$arrayElemAt': [
-                  '$facultyDetails', 0
-                ]
+  const pipeline = [
+    {
+      $lookup: {
+          from: 'acceptedtasks',
+          let: { taskId: '$_id' },
+          pipeline: [
+              {
+                  $match: {
+                      $expr: { $eq: ['$taskId', '$$taskId'] },
+                      studentId: req.student?._id 
+                  }
               }
-            }
-          },
+          ],
+          as: 'acceptedTasks',
+      },
+    },
+    {
+      $lookup: {
+          from: 'completedtasks',
+          let: { taskId: '$_id' },
+          pipeline: [
+              {
+                  $match: {
+                      $expr: { $eq: ['$taskId', '$$taskId'] },
+                      studentId: req.student?._id 
+                  }
+              }
+          ],
+          as: 'completedTasks',
+      },
+    },
+      {
+        $match: {
+          acceptedTasks: { $eq: [] },
+          completedTasks: { $eq: [] },
+          branch: req.student?.branch,
+        },
+      },
+     {
+          '$lookup': {
+            'from': 'faculties', 
+            'localField': 'facultyId', 
+            'foreignField': '_id', 
+            'as': 'facultyDetails'
+          }
+      }, 
         {
-            $project: {
-                name: 1,
-                description: 1,
-                branch: 1,
-                hours: 1,
-                category: 1,
-                difficulty: 1,
-                facultyId: 1,
-                slot: 1,
-                slotsLeft: 1,
-                'createdAt': 1,
-                'updatedAt': 1, 
-                '__v': 1,
+          '$addFields': {
+            'facultyDetails': {
+              '$arrayElemAt': [
+              '$facultyDetails', 0
+              ]
+            }
+          }
+        },
+      {
+          $project: {
+              name: 1,
+              description: 1,
+              branch: 1,
+              hours: 1,
+              category: 1,
+              difficulty: 1,
+              facultyId: 1,
+              slot: 1,
+              slotsLeft: 1,
+              'createdAt': 1,
+              'updatedAt': 1, 
+              '__v': 1,
 
-                'facultyDetails.name': 1, 
-                'facultyDetails.branch': 1, 
-                'facultyDetails.collEmail': 1
-              },
-        }
+              'facultyDetails.name': 1, 
+              'facultyDetails.branch': 1, 
+              'facultyDetails.collEmail': 1
+            },
+      }
       ];
       
       const EligibleTaskList = await Task.aggregate(pipeline).exec();
@@ -331,19 +337,6 @@ const getTasksForStudent = asyncHandler( async (req, res) => {
           }
         }))
 
-        //   const frontEndAttributes = {
-        //     _id: task._id,
-        //     name: task.name,
-        //     description: task.description,
-        //     branch: task.branch,
-        //     category: task.category,
-        //     slot: task.slotsLeft,
-        //     reward: reward,
-        //   }
-  
-        //   return frontEndAttributes // Add 'reward' field to the task, removed 'hours', 'difficulty', 'timestamp' attributes
-      
-
     return res.status(201).json(
         new ApiResponse(200, taskListWithReward, "Fetched All tasks for student successfully")
     )
@@ -353,22 +346,25 @@ const getTasksForStudent = asyncHandler( async (req, res) => {
 const acceptTask = asyncHandler(async(req, res) => {
     const { taskId } = req.body
     
-
     const studentId = req.student?._id
    
     const taskDetails = await Task.findById(taskId)
     if(!taskDetails){
         throw new ApiError(404, "Task not found")
     }
-    const reward =await calculateReward(taskDetails.hours, taskDetails.difficulty)
-console.log(reward)
-    const currentSlotValue = taskDetails.slotsLeft
+    
+    const isTaskAlreadyCompleted = await CompletedTasks.findOne({ studentId, taskId })
+    if (isTaskAlreadyCompleted) {
+        throw new ApiError(400, "Student has already completed this task")
+    }
 
     const isTaskAlreadyAccepted = await AcceptedTask.findOne({ studentId, taskId })
     if (isTaskAlreadyAccepted) {
         throw new ApiError(400, "Student has already accepted this task")
     }
     else{
+      const reward =await calculateReward(taskDetails.hours, taskDetails.difficulty)
+      const currentSlotValue = taskDetails.slotsLeft
         if(currentSlotValue >=1){
             const facultyId = taskDetails.facultyId
             const slotAccepted = (taskDetails.slot - currentSlotValue) + 1
@@ -409,24 +405,6 @@ const getAcceptedTasks = asyncHandler(async (req, res) => {
     try {
         const studentId = req.student?._id;
     
-        // const acceptedTasks = await AcceptedTask.find({ studentId, isSubmitted: false, isRejected: false });
-    
-    
-        // const taskListDetails = await Promise.all(
-        //     acceptedTasks.map(async (acceptedTask) => {
-        //         const task = await Task.findById(acceptedTask.taskId);
-        //         const taskDetails = {
-        //             _id: task._id,
-        //             name: task.name,
-        //             description: task.description,
-        //             branch: task.branch,
-        //             category: task.category,
-        //             reward: acceptedTask.rewardValue, 
-        //         };
-    
-        //         return taskDetails;
-        //     })
-        // );
         const pipeline = [
             {
               '$match': {
@@ -506,34 +484,8 @@ const getAcceptedTasks = asyncHandler(async (req, res) => {
 
 const getSubmittedTasks = asyncHandler(async (req, res) => {
     try {
-        const studentId = req.student?._id;
-    
-        // const submittedTasks = await AcceptedTask.find({ studentId, isSubmitted: true, isRejected: false });
-    
-        // if (!submittedTasks || submittedTasks.length === 0) {
-        //     return res.status(404).json(new ApiResponse(404, null, "No submitted tasks found for this student"));
-        // }
-    
-        // const taskListDetails = await Promise.all(
-        //     submittedTasks.map(async (acceptedTask) => {
-        //         const task = await Task.findById(acceptedTask.taskId);
-        //         const taskDetails = {
-        //             _id: task._id,
-        //             name: task.name,
-        //             description: task.description,
-        //             branch: task.branch,
-        //             category: task.category,
-        //             reward: acceptedTask.rewardValue,
-        //             reason: acceptedTask.reason, 
-        //             submittedon: acceptedTask.updatedAt
-                    
-        //         };
-    
-        //        return taskDetails;
-    
-        //    })
-        // );
-
+        const studentId = req.student?._id
+        
         const pipeline = [
             {
               '$match': {
@@ -670,13 +622,6 @@ const rejectedTasksofStudent = asyncHandler(async (req, res) => {
     try {
         const studentId = req.student?._id
 
-        // const rejectedTasks = await AcceptedTask.find({ studentId: studentId, isRejected: true });
-         
-        // if (!rejectedTasks) {
-        //     throw new ApiError(404, 'No rejected tasks to show');
-        // }
-
-        // return res.status(200).json(new ApiResponse(200, rejectedTasks, "Rejected Tasks fetched successfuly")
         const pipeline = [
             {
               '$match': { 
@@ -796,14 +741,7 @@ const resubmitProof = asyncHandler(async (req, res) => {
 const getCompletedTasksOfStudent = asyncHandler(async (req, res) => {
     try {
         const studentId = req.student?._id
-        // const taskList = await CompletedTasks.find({studentId: studentId})
-        // if (!taskList) {
-        //     throw new ApiError(404, 'No completed tasks to show');
-        // }
-        // return res.status(200).json(
-        //     new ApiResponse(200, taskList, "Fetched All tasks Rejected by faculty successfully")
-        // )
-
+      
         const pipeline = [
             {
               '$match': { 
