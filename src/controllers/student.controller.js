@@ -26,48 +26,71 @@ const generateAccessAndRefereshTokens = async(studentId) =>{
     }
 }
 
-const registerStudent = asyncHandler( async (req, res) => {
-    
-    const {name, rollNo, branch, collEmail, personalEmail,  phoneNumber, walletAdd, password } = req.body
-   
-    if (
-        [name,rollNo, branch, collEmail,personalEmail, phoneNumber,walletAdd, password].some((field) =>
-        field?.trim() === "")
-    ){
-         throw new ApiError(400, "All fields are required")
-    }
+const registerStudent = asyncHandler(async (req, res) => {
+  const { name, rollNo, branch, collEmail, personalEmail, phoneNumber, walletAdd, password } = req.body;
 
-    const existedStudent = await Student.findOne({
-        $or: [{ collEmail }, { rollNo }, { personalEmail }, { phoneNumber }, { walletAdd }]
-    })
+  if ([name, rollNo, branch, collEmail, personalEmail, phoneNumber, walletAdd, password].some(field => field?.trim() === "")) {
+      throw new ApiError(400, "All fields are required");
+  }
 
-    if (existedStudent){
-        throw new ApiError(409, "user with name or email or rollno already exists")
-    }
+  if (!isValidEmail(branch, collEmail)) {
+    throw new ApiError(400, "Invalid college email address for the specified branch");
+}
 
-    const student = await Student.create({
-        name,
-        rollNo,
-        branch,
-        collEmail,
-        personalEmail,
-        phoneNumber,
-        walletAdd,
-        password,
-    })
+  const existedStudent = await Student.findOne({
+      $or: [{ collEmail }, { rollNo }, { personalEmail }, { phoneNumber }, { walletAdd }]
+  });
 
-    const createdStudent = await Student.findById(student._id).select(
-        "-password -refreshToken"
-    )
+  if (existedStudent) {
+      throw new ApiError(409, "User with the same name, email, or roll number already exists");
+  }
 
-    if (!createdStudent) {
-        throw new ApiError(500, "Something went wrong while registering the user")
-    }
+  const student = await Student.create({
+      name,
+      rollNo,
+      branch,
+      collEmail,
+      personalEmail,
+      phoneNumber,
+      walletAdd,
+      password,
+  });
 
-    return res.status(201).json(
-        new ApiResponse(200, createdStudent, "Student registered successfully")
-    )
-})
+  const createdStudent = await Student.findById(student._id).select("-password -refreshToken");
+
+  if (!createdStudent) {
+      throw new ApiError(500, "Something went wrong while registering the user");
+  }
+
+  return res.status(201).json(
+      new ApiResponse(200, createdStudent, "Student registered successfully")
+  );
+});
+
+function isValidEmail(branch, email) {
+  let allowedDomains;
+  switch (branch.toLowerCase()) {
+      case "computer":
+          allowedDomains = /^(.+)@comp\.fcrit\.ac\.in$/;
+          break;
+      case "electrical":
+          allowedDomains = /^(.+)@elec\.fcrit\.ac\.in$/;
+          break;
+      case "mechanical":
+          allowedDomains = /^(.+)@mech\.fcrit\.ac\.in$/;
+          break;
+      case "extc":
+          allowedDomains = /^(.+)@extc\.fcrit\.ac\.in$/;
+          break;
+      case "it":
+          allowedDomains = /^(.+)@it\.fcrit\.ac\.in$/;
+          break;
+      default:
+          allowedDomains = /^(.+)@(comp\.fcrit\.ac\.in|elec\.fcrit\.ac\.in|mech\.fcrit\.ac\.in|extc\.fcrit\.ac\.in|it\.fcrit\.ac\.in)$/;
+          break;
+  }
+  return allowedDomains.test(email.toLowerCase());
+}
 
 
 const loginStudent = asyncHandler(async (req, res) =>{

@@ -25,48 +25,50 @@ const generateAccessAndRefereshTokens = async(facultyId) =>{
 }
 
 
-const registerFaculty = asyncHandler( async (req, res) => {
-    
-    const {name, branch, collEmail, phoneNumber, password } = req.body
-    
+const registerFaculty = asyncHandler(async (req, res) => {
+  
+  const { name, branch, collEmail, phoneNumber, password } = req.body;
 
-    if (
-        [name, branch, collEmail, phoneNumber, password].some((field) =>
-        field?.trim() === "")
-    ){
-         throw new ApiError(400, "All fields are required")
-    }
+  if ([name, branch, collEmail, phoneNumber, password].some(field => field?.trim() === "")) {
+      throw new ApiError(400, "All fields are required");
+  }
 
-    const existedFaculty = await Faculty.findOne({
-        $or: [{ collEmail }, { phoneNumber }]
-    })
+  if (!isValidFacultyEmail(collEmail)) {
+      throw new ApiError(400, "Invalid faculty email address");
+  }
 
-    if (existedFaculty){
-        throw new ApiError(409, "faculty with name or email already exists")
-    }
+  const existedFaculty = await Faculty.findOne({
+      $or: [{ collEmail }, { phoneNumber }]
+  });
 
-    const faculty = await Faculty.create({
-        name,
-        branch,
-        collEmail,
-        phoneNumber,
-        password,
-    })
+  if (existedFaculty) {
+      throw new ApiError(409, "Faculty with the same name or email already exists");
+  }
 
-    const createdFaculty = await Faculty.findById(faculty._id).select(
-        "-password -refreshToken"
-    )
+  const faculty = await Faculty.create({
+      name,
+      branch,
+      collEmail,
+      phoneNumber,
+      password,
+  });
 
-    if (!createdFaculty) {
-        throw new ApiError(500, "Something went wrong while registering the faculty")
-    }
+  const createdFaculty = await Faculty.findById(faculty._id).select("-password -refreshToken");
 
-    return res.status(201).json(
-        new ApiResponse(200, createdFaculty, "Faculty registered successfully")
-    )
-})
+  if (!createdFaculty) {
+      throw new ApiError(500, "Something went wrong while registering the faculty");
+  }
 
+  return res.status(201).json(
+      new ApiResponse(200, createdFaculty, "Faculty registered successfully")
+  );
+});
 
+function isValidFacultyEmail(email) {
+  const allowedDomain = /^(.+)@fcrit\.ac\.in$/;
+
+  return allowedDomain.test(email.toLowerCase());
+}
 
 const loginFaculty = asyncHandler(async (req, res) =>{
     

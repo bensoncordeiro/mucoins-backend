@@ -88,45 +88,48 @@ const generateAccessAndRefereshTokens = async(adminId) =>{
 }
 
 
-const registerAdmin = asyncHandler( async (req, res) => {
-    
-    const {name, email, password} = req.body
-    
+const registerAdmin = asyncHandler(async (req, res) => {
+    const { name, email, password } = req.body;
 
-    if (
-        [name, email, password].some((field) =>
-        field?.trim() === "")
-    ){
-         throw new ApiError(400, "All fields are required")
+    if ([name, email, password].some(field => field?.trim() === "")) {
+        throw new ApiError(400, "All fields are required");
+    }
+
+    if (!isValidAdminEmail(email)) {
+        throw new ApiError(400, "Invalid admin email address");
     }
 
     const existedAdmin = await Adminuser.findOne({
         $or: [{ email }]
-    })
+    });
 
-    if (existedAdmin){
-        throw new ApiError(409, "Admin with email already exists")
+    if (existedAdmin) {
+        throw new ApiError(409, "Admin with the same email already exists");
     }
 
     const admin = await Adminuser.create({
         name,
         email,
         password,
-    
-    })
+    });
 
-    const createdAdmin = await Adminuser.findById(admin._id).select(
-        "-password -refreshToken"
-    )
+    const createdAdmin = await Adminuser.findById(admin._id).select("-password -refreshToken");
 
     if (!createdAdmin) {
-        throw new ApiError(500, "Something went wrong while registering the Admin")
+        throw new ApiError(500, "Something went wrong while registering the Admin");
     }
 
     return res.status(201).json(
         new ApiResponse(200, createdAdmin, "Admin registered successfully")
-    )
-})
+    );
+});
+
+function isValidAdminEmail(email) {
+    const allowedDomain = /^(.+)@fcrit\.ac\.in$/;
+
+    return allowedDomain.test(email.toLowerCase());
+}
+
 
 
 
