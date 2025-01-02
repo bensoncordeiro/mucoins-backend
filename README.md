@@ -81,7 +81,7 @@ This repository contains the backend implementation of µCoins, which handles cr
    npm start
    ```
 
-   Server will be available at `http://localhost:3000`
+   Server will be available at `http://localhost:<yourSelectedPortInENV>`
 
 ---
 
